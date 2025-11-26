@@ -176,6 +176,150 @@
           0 0 20px rgba(212, 175, 55, 0.6),
           0 0 30px rgba(212, 175, 55, 0.4);
       }
+
+      /* Responsive Design Improvements */
+      @media (max-width: 768px) {
+        /* Adjust game stage size for mobile */
+        .game-stage {
+          width: 280px !important;
+          height: 280px !important;
+        }
+        
+        .game-plate {
+          width: 250px !important;
+          height: 250px !important;
+        }
+        
+        .dice-container {
+          width: 200px !important;
+          height: 200px !important;
+        }
+        
+        /* Reduce padding and margins on mobile */
+        .mobile-padding {
+          padding: 0.25rem;
+        }
+        
+        .mobile-margin {
+          margin: 0.25rem;
+        }
+        
+        /* Smaller buttons on mobile */
+        .mobile-button {
+          width: 2.5rem;
+          height: 2.5rem;
+        }
+        
+        /* Smaller text on mobile */
+        .mobile-text-sm {
+          font-size: 0.75rem;
+        }
+        
+        .mobile-text-xs {
+          font-size: 0.625rem;
+        }
+      }
+      
+      @media (max-width: 480px) {
+        /* Further adjustments for small screens */
+        .game-stage {
+          width: 240px !important;
+          height: 240px !important;
+        }
+        
+        .game-plate {
+          width: 220px !important;
+          height: 220px !important;
+        }
+        
+        .dice-container {
+          width: 180px !important;
+          height: 180px !important;
+        }
+        
+        /* Even smaller buttons on very small screens */
+        .xs-button {
+          width: 2rem;
+          height: 2rem;
+        }
+      }
+      
+      /* Aspect ratio preservation for game stage */
+      .aspect-square {
+        aspect-ratio: 1 / 1;
+      }
+      
+      /* Device-specific media queries for consistent game stage ratio */
+      @media (max-width: 320px) {
+        .game-stage-container {
+          max-width: 200px !important;
+        }
+      }
+      
+      @media (min-width: 321px) and (max-width: 374px) {
+        .game-stage-container {
+          max-width: 240px !important;
+        }
+      }
+      
+      @media (min-width: 375px) and (max-width: 413px) {
+        .game-stage-container {
+          max-width: 280px !important;
+        }
+      }
+      
+      @media (min-width: 414px) and (max-width: 767px) {
+        .game-stage-container {
+          max-width: 320px !important;
+        }
+      }
+      
+      @media (min-width: 768px) and (max-width: 1023px) {
+        .game-stage-container {
+          max-width: 400px !important;
+        }
+      }
+      
+      @media (min-width: 1024px) {
+        .game-stage-container {
+          max-width: 450px !important;
+        }
+      }
+      
+      /* Orientation-specific adjustments */
+      @media (orientation: portrait) {
+        .portrait-layout {
+          flex-direction: column;
+        }
+        
+        .portrait-game-stage {
+          margin: 1rem 0;
+        }
+      }
+      
+      @media (orientation: landscape) {
+        .landscape-layout {
+          flex-direction: row;
+        }
+        
+        .landscape-game-stage {
+          margin: 0 1rem;
+        }
+      }
+      
+      /* Responsive testing helper classes */
+      .test-device-mobile { width: 375px; height: 667px; }
+      .test-device-tablet { width: 768px; height: 1024px; }
+      .test-device-desktop { width: 1200px; height: 800px; }
+      
+      /* Debugging helpers */
+      .debug-outline { outline: 1px solid red; }
+      .debug-grid {
+        background-image: 
+          linear-gradient(rgba(255,0,0,0.1) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,0,0,0.1) 1px, transparent 1px);
+        background-size: 20px 20px;
+      }
     </style>
   <script type="importmap">
 {

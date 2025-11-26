@@ -65,7 +65,7 @@ const Bowl: React.FC<BowlProps> = ({ gameState, onOpen }) => {
         onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
         onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
         className={`
-          relative w-[304px] h-[304px] md:w-[399px] md:h-[399px] landscape:w-[237px] landscape:h-[237px] rounded-full 
+          relative w-[280px] h-[280px] md:w-[370px] md:h-[370px] landscape:w-[220px] landscape:h-[220px] rounded-full 
           pointer-events-auto flex items-center justify-center select-none
           ${isShaking ? 'animate-shake-bowl' : ''}
           ${!isDragging && !isShaking ? 'transition-all duration-300 ease-out' : ''} 
@@ -100,8 +100,8 @@ const Bowl: React.FC<BowlProps> = ({ gameState, onOpen }) => {
         </div>
 
         {/* Handle / Knob */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-gradient-to-b from-[#ffffff] to-[#9ca3af] shadow-lg border-2 border-white flex items-center justify-center">
-            <div className="w-10 h-10 rounded-full bg-[#1e3a8a] border-4 border-white shadow-inner"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-gradient-to-b from-[#ffffff] to-[#9ca3af] shadow-lg border-2 border-white flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-[#1e3a8a] border-4 border-white shadow-inner"></div>
         </div>
 
         {/* Interaction Hint */}

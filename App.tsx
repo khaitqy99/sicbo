@@ -698,204 +698,208 @@ const App: React.FC = () => {
              </div>
         </div>
         
-        {/* Controls & Dice Row */}
-        <div className="w-full max-w-6xl flex items-start justify-between gap-2 md:gap-4 px-1 md:px-4 mt-16 md:mt-20 mb-1 md:mb-2 shrink-0 relative landscape:mt-14 landscape:mb-0 landscape:gap-2">
-          
-          {/* Left: Chip Selection */}
-          <div className="flex flex-col gap-1 md:gap-2 shrink-0 landscape:gap-1 mt-2 md:mt-3">
-            <div className="rounded-lg p-1 md:p-2 landscape:p-1">
-              <div className="flex flex-col gap-1.5 md:gap-2.5 landscape:gap-1.5">
-                {CHIP_VALUES.map(val => (
-                  <button
-                    key={val}
-                    onClick={() => setSelectedChip(val)}
-                    disabled={gameState !== 'IDLE' && gameState !== 'REVEALED'}
-                    className={`
-                      relative w-11 h-11 md:w-14 md:h-14 landscape:w-10 landscape:h-10 rounded-full shrink-0 transition-all active:scale-95
-                      ${selectedChip === val ? '-translate-y-1 ring-2 ring-yellow-400 z-10' : 'hover:-translate-y-0.5 opacity-90'}
-                    `}
-                  >
-                    {/* Chip Visual */}
-                    <div 
-                      className={`w-full h-full rounded-full border-[3px] border-dashed border-white/30 flex items-center justify-center text-[10px] md:text-xs font-bold text-white shadow-md`}
-                      style={{ background: val >= 1000 ? '#eab308' : val >= 100 ? '#dc2626' : '#2563eb' }}
+        {/* Main Game Area - Responsive Grid Layout */}
+        <div className="w-full max-w-6xl px-2 md:px-4 mt-16 md:mt-20 mb-2 md:mb-4 shrink-0 relative">
+          {/* Responsive grid for game elements */}
+          <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-4 md:gap-6 items-start">
+            {/* Left: Chip Selection */}
+            <div className="flex md:flex-col gap-2 md:gap-3 justify-center md:justify-start mt-2">
+              <div className="rounded-lg p-1 md:p-2">
+                <div className="flex md:flex-col gap-2 md:gap-3">
+                  {CHIP_VALUES.map(val => (
+                    <button
+                      key={val}
+                      onClick={() => setSelectedChip(val)}
+                      disabled={gameState !== 'IDLE' && gameState !== 'REVEALED'}
+                      className={`
+                        relative w-10 h-10 md:w-12 md:h-12 rounded-full shrink-0 transition-all active:scale-95
+                        ${selectedChip === val ? '-translate-y-1 ring-2 ring-yellow-400 z-10' : 'hover:-translate-y-0.5 opacity-90'}
+                      `}
                     >
-                      <div className="bg-black/20 w-[80%] h-[80%] rounded-full flex items-center justify-center border border-white/10">
-                        {val >= 1000 ? val/1000 + 'k' : val}
+                      {/* Chip Visual */}
+                      <div 
+                        className={`w-full h-full rounded-full border-[3px] border-dashed border-white/30 flex items-center justify-center text-[10px] md:text-xs font-bold text-white shadow-md`}
+                        style={{ background: val >= 1000 ? '#eab308' : val >= 100 ? '#dc2626' : '#2563eb' }}
+                      >
+                        <div className="bg-black/20 w-[80%] h-[80%] rounded-full flex items-center justify-center border border-white/10">
+                          {val >= 1000 ? val/1000 + 'k' : val}
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Center: Game Stage (Dice & Bowl) */}
-          <div className="absolute left-1/2 -translate-x-1/2 w-[350px] h-[350px] md:w-[450px] md:h-[450px] landscape:w-[280px] landscape:h-[280px] flex items-center justify-center">
-            {/* The "Plate" (Đĩa) */}
-            <div className="absolute w-[320px] h-[320px] md:w-[420px] md:h-[420px] landscape:w-[250px] landscape:h-[250px] rounded-full bg-gradient-to-br from-white via-zinc-200 to-zinc-400 shadow-[0_10px_30px_rgba(0,0,0,0.5)] border-4 border-zinc-100 flex items-center justify-center">
-              <div className="w-[95%] h-[95%] rounded-full border border-zinc-300/50 bg-[radial-gradient(circle,rgba(255,255,255,1)_0%,rgba(220,220,220,1)_100%)]"></div>
-            </div>
+            {/* Center: Game Stage (Dice & Bowl) - Maintains aspect ratio */}
+            <div className="flex items-center justify-center">
+              <div className="relative w-full aspect-square game-stage-container flex items-center justify-center">
+                {/* The "Plate" (Đĩa) */}
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white via-zinc-200 to-zinc-400 shadow-[0_10px_30px_rgba(0,0,0,0.5)] border-4 border-zinc-100 flex items-center justify-center">
+                  <div className="w-[95%] h-[95%] rounded-full border border-zinc-300/50 bg-[radial-gradient(circle,rgba(255,255,255,1)_0%,rgba(220,220,220,1)_100%)]"></div>
+                </div>
 
-            {/* Dice */}
-            <div className="perspective-1000 relative w-[260px] h-[260px] md:w-[320px] md:h-[320px] landscape:w-[220px] landscape:h-[220px] flex items-center justify-center z-10">
-              <div className={`absolute top-4 left-1/2 -translate-x-1/2 scale-[0.8] md:scale-[0.9] landscape:scale-[0.65] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[0]} rollId={rollId} /></div>
-              <div className={`absolute bottom-4 left-4 scale-[0.8] md:scale-[0.9] landscape:scale-[0.65] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[1]} rollId={rollId} /></div>
-              <div className={`absolute bottom-4 right-4 scale-[0.8] md:scale-[0.9] landscape:scale-[0.65] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[2]} rollId={rollId} /></div>
-            </div>
+                {/* Dice */}
+                <div className="perspective-1000 relative w-[200px] h-[200px] sm:w-[240px] sm:h-[240px] md:w-[320px] md:h-[320px] flex items-center justify-center z-10">
+                  <div className={`absolute top-4 left-1/2 -translate-x-1/2 scale-[0.7] sm:scale-[0.8] md:scale-[0.9] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[0]} rollId={rollId} /></div>
+                  <div className={`absolute bottom-4 left-4 scale-[0.7] sm:scale-[0.8] md:scale-[0.9] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[1]} rollId={rollId} /></div>
+                  <div className={`absolute bottom-4 right-4 scale-[0.7] sm:scale-[0.8] md:scale-[0.9] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[2]} rollId={rollId} /></div>
+                </div>
 
-            {/* Bowl (Z-Index handled inside) */}
-            {(gameState === 'SHAKING' || gameState === 'READY_TO_OPEN') && (
-              <>
-                <Bowl 
-                  gameState={gameState} 
-                  onOpen={() => {
-                    playSound('button');
-                    revealResult();
-                  }} 
-                />
-              </>
-            )}
+                {/* Bowl (Z-Index handled inside) */}
+                {(gameState === 'SHAKING' || gameState === 'READY_TO_OPEN') && (
+                  <>
+                    <Bowl 
+                      gameState={gameState} 
+                      onOpen={() => {
+                        playSound('button');
+                        revealResult();
+                      }} 
+                    />
+                  </>
+                )}
 
-            {/* Notifications */}
-            {lastWinAmount > 0 && (gameState === 'REVEALED' || gameState === 'IDLE') && (
-              <div className="absolute top-10 animate-bounce text-yellow-300 text-4xl font-serif font-bold drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-50 text-stroke-gold">
-                +{lastWinAmount.toLocaleString()}
-                {comboCount > 0 && (
-                  <div className="text-lg text-orange-400 mt-1">
-                    COMBO x{comboCount} ({comboMultiplier.toFixed(1)}x)
+                {/* Notifications */}
+                {lastWinAmount > 0 && (gameState === 'REVEALED' || gameState === 'IDLE') && (
+                  <div className="absolute top-10 animate-bounce text-yellow-300 text-2xl sm:text-3xl md:text-4xl font-serif font-bold drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-50 text-stroke-gold">
+                    +{lastWinAmount.toLocaleString()}
+                    {comboCount > 0 && (
+                      <div className="text-sm sm:text-base md:text-lg text-orange-400 mt-1">
+                        COMBO x{comboCount} ({comboMultiplier.toFixed(1)}x)
+                      </div>
+                    )}
+                  </div>
+                )}
+                {dailyChallengeReward > 0 && (
+                  <div className="absolute bottom-10 animate-bounce text-green-300 text-lg sm:text-xl md:text-2xl font-serif font-bold drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-50">
+                    Thử thách hàng ngày: +{dailyChallengeReward.toLocaleString()}
+                  </div>
+                )}
+                {streakBonus > 0 && (
+                  <div className="absolute top-20 animate-bounce text-orange-300 text-base sm:text-lg md:text-xl font-serif font-bold drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-50">
+                    🔥 Thưởng Chuỗi: +{streakBonus.toLocaleString()}!
                   </div>
                 )}
               </div>
-            )}
-            {dailyChallengeReward > 0 && (
-              <div className="absolute bottom-10 animate-bounce text-green-300 text-2xl font-serif font-bold drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-50">
-                Thử thách hàng ngày: +{dailyChallengeReward.toLocaleString()}
-              </div>
-            )}
-            {streakBonus > 0 && (
-              <div className="absolute top-20 animate-bounce text-orange-300 text-xl font-serif font-bold drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-50">
-                🔥 Thưởng Chuỗi: +{streakBonus.toLocaleString()}!
-              </div>
-            )}
-          </div>
+            </div>
 
-          {/* Right: Action Buttons */}
-          <div className="flex flex-col gap-1 md:gap-2 shrink-0 ml-auto landscape:gap-1">
-            {/* Quick Bet Buttons */}
-            {(gameState === 'IDLE' || gameState === 'REVEALED') && (Object.keys(currentBets).length > 0) && (
-              <div className="flex gap-1 mb-1">
-                <button
-                  onClick={() => {
-                    Object.keys(currentBets).forEach(area => {
-                      handleBet(area as BetArea, 2);
-                    });
-                  }}
-                  className="px-2 py-1 text-[8px] bg-blue-600 hover:bg-blue-700 rounded text-white font-bold transition-colors active:scale-95"
-                  title="Nhân đôi tất cả cược"
+            {/* Right: Action Buttons */}
+            <div className="flex md:flex-col gap-2 md:gap-3 justify-center md:justify-start">
+              {/* Quick Bet Buttons */}
+              {(gameState === 'IDLE' || gameState === 'REVEALED') && (Object.keys(currentBets).length > 0) && (
+                <div className="flex gap-1 mb-1">
+                  <button
+                    onClick={() => {
+                      Object.keys(currentBets).forEach(area => {
+                        handleBet(area as BetArea, 2);
+                      });
+                    }}
+                    className="px-2 py-1 text-[8px] sm:text-[9px] bg-blue-600 hover:bg-blue-700 rounded text-white font-bold transition-colors active:scale-95"
+                    title="Nhân đôi tất cả cược"
+                  >
+                    2x
+                  </button>
+                  <button
+                    onClick={() => {
+                      Object.keys(currentBets).forEach(area => {
+                        const currentAmount = currentBets[area] || 0;
+                        if (currentAmount > 0) {
+                          setCurrentBets(prev => {
+                            const newBets = { ...prev };
+                            const newAmount = Math.floor(currentAmount / 2);
+                            if (newAmount > 0) {
+                              newBets[area] = newAmount;
+                              setBalance(prev => prev + (currentAmount - newAmount));
+                            } else {
+                              delete newBets[area];
+                              setBalance(prev => prev + currentAmount);
+                            }
+                            return newBets;
+                          });
+                        }
+                      });
+                    }}
+                    className="px-2 py-1 text-[8px] sm:text-[9px] bg-orange-600 hover:bg-orange-700 rounded text-white font-bold transition-colors active:scale-95"
+                    title="Giảm một nửa tất cả cược"
+                  >
+                    1/2
+                  </button>
+                </div>
+              )}
+              
+              {/* ROLL Button */}
+              <button
+                onClick={() => { if (soundEnabled) playSound('button'); startRoll(); }}
+                disabled={gameState !== 'IDLE' && gameState !== 'REVEALED'}
+                className={`
+                  w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full 
+                  bg-gradient-to-b from-yellow-400 to-yellow-700
+                  border-2 md:border-4 border-[#451a03]
+                  shadow-[0_4px_0_#270e01,0_0_15px_rgba(234,179,8,0.3)]
+                  flex items-center justify-center
+                  active:shadow-none active:translate-y-1 transition-all button-glow
+                  ${gameState !== 'IDLE' && gameState !== 'REVEALED' ? 'opacity-80 grayscale-[0.5]' : 'hover:brightness-110 hover:scale-105'}
+                `}
+              >
+                <span className="font-bold text-[#451a03] text-xs sm:text-sm md:text-lg font-serif tracking-wide">
+                  {gameState === 'READY_TO_OPEN' ? 'MỞ' : 'LẮC'}
+                </span>
+              </button>
+
+              {/* Utils */}
+              <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
+                <button 
+                  onClick={() => { if (soundEnabled) playSound('button'); clearBets(); }} 
+                  className="flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-zinc-800 rounded-lg border border-zinc-600 active:bg-zinc-700"
                 >
-                  2x
+                  <X size={12} className="text-red-500 mb-0.5" />
+                  <span className="text-[8px] sm:text-[9px] md:text-[10px] text-zinc-400 font-bold">XÓA</span>
                 </button>
-                <button
-                  onClick={() => {
-                    Object.keys(currentBets).forEach(area => {
-                      const currentAmount = currentBets[area] || 0;
-                      if (currentAmount > 0) {
-                        setCurrentBets(prev => {
-                          const newBets = { ...prev };
-                          const newAmount = Math.floor(currentAmount / 2);
-                          if (newAmount > 0) {
-                            newBets[area] = newAmount;
-                            setBalance(prev => prev + (currentAmount - newAmount));
-                          } else {
-                            delete newBets[area];
-                            setBalance(prev => prev + currentAmount);
-                          }
-                          return newBets;
-                        });
-                      }
-                    });
-                  }}
-                  className="px-2 py-1 text-[8px] bg-orange-600 hover:bg-orange-700 rounded text-white font-bold transition-colors active:scale-95"
-                  title="Giảm một nửa tất cả cược"
+
+                <button 
+                  onClick={() => { if (soundEnabled) playSound('button'); toggleAutoPlay(); }} 
+                  className={`flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg border active:brightness-90 ${isAutoPlaying ? 'bg-green-900 border-green-500' : 'bg-[#14532d] border-[#166534]'}`}
                 >
-                  1/2
+                  {isAutoPlaying ? <StopCircle size={12} className="text-white mb-0.5" /> : <Play size={12} className="text-white mb-0.5" />}
+                  <span className="text-[8px] sm:text-[9px] md:text-[10px] text-green-100 font-bold">TỰ ĐỘNG</span>
+                </button>
+
+                <button 
+                  onClick={() => { if (soundEnabled) playSound('button'); handleAiAdvice(); }}
+                  className="flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-purple-900/80 rounded-lg border border-purple-600 active:bg-purple-800"
+                >
+                  <BrainCircuit size={12} className={`text-purple-300 mb-0.5 ${isLoadingAi ? 'animate-spin' : ''}`} />
+                  <span className="text-[8px] sm:text-[9px] md:text-[10px] text-purple-200 font-bold">AI</span>
+                </button>
+
+                <button 
+                  onClick={() => { if (soundEnabled) playSound('button'); setShowStats(true); }}
+                  className="flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-blue-900/80 rounded-lg border border-blue-600 active:bg-blue-800"
+                >
+                  <BarChart3 size={12} className="text-blue-300 mb-0.5" />
+                  <span className="text-[8px] sm:text-[9px] md:text-[10px] text-blue-200 font-bold">THỐNG KÊ</span>
+                </button>
+
+                <button 
+                  onClick={() => { if (soundEnabled) playSound('button'); setShowSettings(true); }}
+                  className="flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-zinc-800 rounded-lg border border-zinc-600 active:bg-zinc-700"
+                >
+                  <Settings size={12} className="text-zinc-300 mb-0.5" />
+                  <span className="text-[8px] sm:text-[9px] md:text-[10px] text-zinc-200 font-bold">CÀI ĐẶT</span>
+                </button>
+
+                <button 
+                  onClick={() => { if (soundEnabled) playSound('button'); setShowDailyChallenge(!showDailyChallenge); }}
+                  className={`flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg border active:brightness-90 ${
+                    showDailyChallenge 
+                      ? 'bg-yellow-900 border-yellow-500' 
+                      : 'bg-yellow-900/50 border-yellow-600/50'
+                  }`}
+                >
+                  <Target size={12} className="text-yellow-300 mb-0.5" />
+                  <span className="text-[8px] sm:text-[9px] md:text-[10px] text-yellow-200 font-bold">HÀNG NGÀY</span>
                 </button>
               </div>
-            )}
-            
-            {/* ROLL Button */}
-            <button
-              onClick={() => { if (soundEnabled) playSound('button'); startRoll(); }}
-              disabled={gameState !== 'IDLE' && gameState !== 'REVEALED'}
-              className={`
-                w-12 h-12 md:w-18 md:h-18 landscape:w-10 landscape:h-10 rounded-full 
-                bg-gradient-to-b from-yellow-400 to-yellow-700
-                border-2 md:border-4 border-[#451a03] landscape:border-2
-                shadow-[0_4px_0_#270e01,0_0_15px_rgba(234,179,8,0.3)]
-                flex items-center justify-center
-                active:shadow-none active:translate-y-1 transition-all button-glow
-                ${gameState !== 'IDLE' && gameState !== 'REVEALED' ? 'opacity-80 grayscale-[0.5]' : 'hover:brightness-110 hover:scale-105'}
-              `}
-            >
-              <span className="font-bold text-[#451a03] text-xs md:text-lg landscape:text-[10px] font-serif tracking-wide">
-                {gameState === 'READY_TO_OPEN' ? 'MỞ' : 'LẮC'}
-              </span>
-            </button>
-
-            {/* Utils */}
-            <div className="flex gap-1 md:gap-2 landscape:gap-1">
-              <button 
-                onClick={() => { if (soundEnabled) playSound('button'); clearBets(); }} 
-                className="flex flex-col items-center justify-center w-9 h-9 md:w-12 md:h-12 landscape:w-8 landscape:h-8 bg-zinc-800 rounded-lg border border-zinc-600 active:bg-zinc-700"
-              >
-                <X size={12} className="text-red-500 mb-0.5 landscape:w-2.5 landscape:h-2.5" />
-                <span className="text-[8px] md:text-[9px] landscape:text-[7px] text-zinc-400 font-bold">XÓA</span>
-              </button>
-
-              <button 
-                onClick={() => { if (soundEnabled) playSound('button'); toggleAutoPlay(); }} 
-                className={`flex flex-col items-center justify-center w-9 h-9 md:w-12 md:h-12 landscape:w-8 landscape:h-8 rounded-lg border active:brightness-90 ${isAutoPlaying ? 'bg-green-900 border-green-500' : 'bg-[#14532d] border-[#166534]'}`}
-              >
-                {isAutoPlaying ? <StopCircle size={12} className="text-white mb-0.5 landscape:w-2.5 landscape:h-2.5" /> : <Play size={12} className="text-white mb-0.5 landscape:w-2.5 landscape:h-2.5" />}
-                <span className="text-[8px] md:text-[9px] landscape:text-[7px] text-green-100 font-bold">TỰ ĐỘNG</span>
-              </button>
-
-              <button 
-                onClick={() => { if (soundEnabled) playSound('button'); handleAiAdvice(); }}
-                className="flex flex-col items-center justify-center w-9 h-9 md:w-12 md:h-12 landscape:w-8 landscape:h-8 bg-purple-900/80 rounded-lg border border-purple-600 active:bg-purple-800"
-              >
-                <BrainCircuit size={12} className={`text-purple-300 mb-0.5 landscape:w-2.5 landscape:h-2.5 ${isLoadingAi ? 'animate-spin' : ''}`} />
-                <span className="text-[8px] md:text-[9px] landscape:text-[7px] text-purple-200 font-bold">AI</span>
-              </button>
-
-              <button 
-                onClick={() => { if (soundEnabled) playSound('button'); setShowStats(true); }}
-                className="flex flex-col items-center justify-center w-9 h-9 md:w-12 md:h-12 landscape:w-8 landscape:h-8 bg-blue-900/80 rounded-lg border border-blue-600 active:bg-blue-800"
-              >
-                <BarChart3 size={12} className="text-blue-300 mb-0.5 landscape:w-2.5 landscape:h-2.5" />
-                <span className="text-[8px] md:text-[9px] landscape:text-[7px] text-blue-200 font-bold">THỐNG KÊ</span>
-              </button>
-
-              <button 
-                onClick={() => { if (soundEnabled) playSound('button'); setShowSettings(true); }}
-                className="flex flex-col items-center justify-center w-9 h-9 md:w-12 md:h-12 landscape:w-8 landscape:h-8 bg-zinc-800 rounded-lg border border-zinc-600 active:bg-zinc-700"
-              >
-                <Settings size={12} className="text-zinc-300 mb-0.5 landscape:w-2.5 landscape:h-2.5" />
-                <span className="text-[8px] md:text-[9px] landscape:text-[7px] text-zinc-200 font-bold">CÀI ĐẶT</span>
-              </button>
-
-              <button 
-                onClick={() => { if (soundEnabled) playSound('button'); setShowDailyChallenge(!showDailyChallenge); }}
-                className={`flex flex-col items-center justify-center w-9 h-9 md:w-12 md:h-12 landscape:w-8 landscape:h-8 rounded-lg border active:brightness-90 ${
-                  showDailyChallenge 
-                    ? 'bg-yellow-900 border-yellow-500' 
-                    : 'bg-yellow-900/50 border-yellow-600/50'
-                }`}
-              >
-                <Target size={12} className="text-yellow-300 mb-0.5 landscape:w-2.5 landscape:h-2.5" />
-                <span className="text-[8px] md:text-[9px] landscape:text-[7px] text-yellow-200 font-bold">HÀNG NGÀY</span>
-              </button>
             </div>
           </div>
         </div>
