@@ -11,7 +11,7 @@ import SettingsPanel from './components/SettingsPanel';
 import MoneyParticle from './components/MoneyParticle';
 import RippleEffect from './components/RippleEffect';
 import ChipParticle from './components/ChipParticle';
-import CountdownTimer from './components/CountdownTimer';
+
 import BigWinCelebration from './components/BigWinCelebration';
 import { BetArea, GameStats, RollResult, StrategyType } from './types';
 import { CHIP_VALUES, INITIAL_BALANCE, PAYOUTS } from './constants';
@@ -80,7 +80,6 @@ const App: React.FC = () => {
   const particleIdRef = useRef(0);
 
   // Excitement Features
-  const [showCountdown, setShowCountdown] = useState(false);
   const [showBigWinCelebration, setShowBigWinCelebration] = useState(false);
   const [bigWinAmount, setBigWinAmount] = useState(0);
   const [bigWinMultiplier, setBigWinMultiplier] = useState(1);
@@ -89,7 +88,7 @@ const App: React.FC = () => {
   const [showQuickBet, setShowQuickBet] = useState(false);
 
   // Betting Session Timer
-  const [bettingSessionDuration, setBettingSessionDuration] = useState<number>(15); // seconds, 0 = disabled
+  const [bettingSessionDuration, setBettingSessionDuration] = useState<number>(0); // seconds, 0 = disabled
   const [bettingTimeLeft, setBettingTimeLeft] = useState<number>(0);
   const bettingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -279,13 +278,8 @@ const App: React.FC = () => {
     
     const totalBetAmount = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
     
-    // Validate minimum bet
-    if (totalBetAmount === 0 && !isAutoPlaying) { 
-      alert("Vui lòng đặt cược trước!"); 
-      return; 
-    }
-    
-    if (totalBetAmount < MIN_BET_AMOUNT && !isAutoPlaying) {
+    // Allow rolling without bets as per game design
+    if (totalBetAmount > 0 && totalBetAmount < MIN_BET_AMOUNT && !isAutoPlaying) {
       alert(`Cược tối thiểu là ${MIN_BET_AMOUNT}!`);
       return;
     }
@@ -573,14 +567,10 @@ const App: React.FC = () => {
       }
       return; 
     }
-    if (Object.keys(currentBets).length === 0) { 
-      alert("Vui lòng đặt cược cơ bản trước!"); 
-      return; 
-    }
     
-    // Validate minimum bet
+    // Validate minimum bet only if there are bets
     const totalBet = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
-    if (totalBet < MIN_BET_AMOUNT) {
+    if (totalBet > 0 && totalBet < MIN_BET_AMOUNT) {
       alert(`Cược tối thiểu là ${MIN_BET_AMOUNT}!`);
       return;
     }
@@ -761,22 +751,9 @@ const App: React.FC = () => {
                   gameState={gameState} 
                   onOpen={() => {
                     playSound('button');
-                    setShowCountdown(false);
                     revealResult();
                   }} 
                 />
-                {showCountdown && gameState === 'READY_TO_OPEN' && (
-                  <CountdownTimer
-                    duration={3}
-                    active={true}
-                    onComplete={() => {
-                      setShowCountdown(false);
-                      if (!isAutoPlaying) {
-                        revealResult();
-                      }
-                    }}
-                  />
-                )}
               </>
             )}
 
