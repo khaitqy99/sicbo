@@ -24,6 +24,11 @@ import { Sparkles, Play, StopCircle, RefreshCw, BrainCircuit, Wallet, Trophy, Hi
 type GameState = 'IDLE' | 'ROLLING' | 'SHAKING' | 'READY_TO_OPEN' | 'REVEALED';
 
 const App: React.FC = () => {
+  // Add new state for fullscreen
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  // Add state for utilities menu
+  const [isUtilitiesOpen, setIsUtilitiesOpen] = useState(false);
+  
   // State
   const [balance, setBalance] = useState(INITIAL_BALANCE);
   const [currentBets, setCurrentBets] = useState<Record<string, number>>({});
@@ -643,10 +648,70 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [balance, history, stats, unlockedAchievements]);
 
+  // Function to enter fullscreen mode
+  const enterFullscreen = useCallback(() => {
+    const element = document.documentElement;
+    if (element.requestFullscreen) {
+      element.requestFullscreen();
+    } else if ((element as any).webkitRequestFullscreen) { // Safari
+      (element as any).webkitRequestFullscreen();
+    } else if ((element as any).msRequestFullscreen) { // IE11
+      (element as any).msRequestFullscreen();
+    }
+    setIsFullscreen(true);
+  }, []);
+
+  // Function to exit fullscreen mode
+  const exitFullscreen = useCallback(() => {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if ((document as any).webkitExitFullscreen) { // Safari
+      (document as any).webkitExitFullscreen();
+    } else if ((document as any).msExitFullscreen) { // IE11
+      (document as any).msExitFullscreen();
+    }
+    setIsFullscreen(false);
+  }, []);
+
+  // Check if already in fullscreen
+  useEffect(() => {
+    const checkFullscreen = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    // Check on mount
+    checkFullscreen();
+
+    // Add event listeners
+    document.addEventListener('fullscreenchange', checkFullscreen);
+    document.addEventListener('webkitfullscreenchange', checkFullscreen); // Safari
+    document.addEventListener('msfullscreenchange', checkFullscreen); // IE11
+
+    return () => {
+      // Clean up event listeners
+      document.removeEventListener('fullscreenchange', checkFullscreen);
+      document.removeEventListener('webkitfullscreenchange', checkFullscreen);
+      document.removeEventListener('msfullscreenchange', checkFullscreen);
+    };
+  }, []);
+
+  // Automatically enter fullscreen on first visit
+  useEffect(() => {
+    const hasVisited = localStorage.getItem('hasVisited');
+    if (!hasVisited) {
+      // Small delay to ensure page is loaded
+      const timer = setTimeout(() => {
+        enterFullscreen();
+        localStorage.setItem('hasVisited', 'true');
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [enterFullscreen]);
+
   return (
     <div className="h-full flex flex-col bg-felt">
       {/* --- Main Content Area --- */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden relative flex flex-col items-center landscape:overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden relative flex flex-col items-center">
         
         {/* Logo & Title - Top Left */}
         <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
@@ -659,47 +724,179 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Balance Display - Top Right */}
-        <div className="absolute top-4 right-4 z-50">
+        {/* Utilities Menu - Top Right */}
+        <div className="absolute top-4 right-4 z-50 flex gap-2">
+          {/* Utilities Button */}
+          <div className="relative">
+            <button 
+              onClick={() => setIsUtilitiesOpen(!isUtilitiesOpen)}
+              className="bg-black/60 border border-yellow-600/50 rounded-full p-2 flex items-center justify-center hover:bg-black/80 transition-colors"
+              title="Utilities"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500">
+                <circle cx="12" cy="12" r="1"></circle>
+                <circle cx="19" cy="12" r="1"></circle>
+                <circle cx="5" cy="12" r="1"></circle>
+              </svg>
+            </button>
+            
+            {/* Utilities Menu */}
+            {isUtilitiesOpen && (
+              <div className="absolute top-full right-0 mt-2 bg-black/90 border border-yellow-600/50 rounded-lg shadow-xl z-50 min-w-[160px]">
+                <div className="p-2">
+                  {/* Fullscreen Toggle */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      isFullscreen ? exitFullscreen() : enterFullscreen();
+                      setIsUtilitiesOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-white/10 transition-colors"
+                  >
+                    {isFullscreen ? (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16v5h5M21 16v5h-5"/>
+                        </svg>
+                        <span className="text-yellow-200 text-sm">Exit Fullscreen</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 8V3h5M21 8V3h-5M3 16v5h5M21 16v5h-5"/>
+                        </svg>
+                        <span className="text-yellow-200 text-sm">Enter Fullscreen</span>
+                      </>
+                    )}
+                  </button>
+                  
+                  {/* History */}
+                  <div className="p-2">
+                    <div className="text-yellow-200 text-sm font-bold mb-1 flex items-center gap-1">
+                      <HistoryIcon size={14} />
+                      <span>Recent Rolls:</span>
+                    </div>
+                    <div className="flex gap-1 flex-wrap max-h-20 overflow-y-auto">
+                      {history.slice(0, 15).map((h, i) => (
+                        <div key={i} className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${h.isTriple ? 'bg-green-600' : h.sum >= 11 ? 'bg-red-600' : 'bg-blue-600'}`}>
+                          {h.sum >= 11 && !h.isTriple ? 'L' : h.sum <= 10 && !h.isTriple ? 'N' : 'B'}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Clear Bets */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearBets();
+                      setIsUtilitiesOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-white/10 transition-colors"
+                    disabled={gameState !== 'IDLE' && gameState !== 'REVEALED'}
+                  >
+                    <X size={16} className="text-red-500" />
+                    <span className="text-yellow-200 text-sm">Clear Bets</span>
+                  </button>
+                  
+                  {/* Auto Play */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleAutoPlay();
+                      setIsUtilitiesOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2 p-2 rounded transition-colors ${
+                      isAutoPlaying ? 'hover:bg-red-900/50' : 'hover:bg-green-900/50'
+                    }`}
+                  >
+                    {isAutoPlaying ? (
+                      <>
+                        <StopCircle size={16} className="text-red-400" />
+                        <span className="text-yellow-200 text-sm">Stop Auto Play</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play size={16} className="text-green-400" />
+                        <span className="text-yellow-200 text-sm">Auto Play</span>
+                      </>
+                    )}
+                  </button>
+                  
+                  {/* AI Advice */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAiAdvice();
+                      setIsUtilitiesOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-purple-900/50 transition-colors"
+                    disabled={isLoadingAi}
+                  >
+                    <BrainCircuit size={16} className={`text-purple-400 ${isLoadingAi ? 'animate-spin' : ''}`} />
+                    <span className="text-yellow-200 text-sm">AI Advice</span>
+                  </button>
+                  
+                  {/* Statistics */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowStats(true);
+                      setIsUtilitiesOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-blue-900/50 transition-colors"
+                  >
+                    <BarChart3 size={16} className="text-blue-400" />
+                    <span className="text-yellow-200 text-sm">Statistics</span>
+                  </button>
+                  
+                  {/* Settings */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowSettings(true);
+                      setIsUtilitiesOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-white/10 transition-colors"
+                  >
+                    <Settings size={16} className="text-gray-300" />
+                    <span className="text-yellow-200 text-sm">Settings</span>
+                  </button>
+                  
+                  {/* Daily Challenge */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDailyChallenge(!showDailyChallenge);
+                      setIsUtilitiesOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-yellow-900/50 transition-colors"
+                  >
+                    <Target size={16} className="text-yellow-400" />
+                    <span className="text-yellow-200 text-sm">Daily Challenge</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Balance Display */}
           <div className="bg-black/60 border border-yellow-600/50 rounded-full px-3 py-1 flex items-center gap-2 min-w-[120px] shadow-inner">
             <Wallet size={14} className="text-yellow-500" />
             <span className="text-yellow-400 font-mono font-bold text-base md:text-lg">{balance.toLocaleString()}</span>
           </div>
         </div>
 
-        {/* Info Bar */}
-        <div className="absolute top-2 md:top-3 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm w-full max-w-2xl rounded-lg py-0.5 md:py-1 px-2 md:px-4 flex justify-between items-center text-[10px] md:text-xs border-y border-white/5 shrink-0 landscape:top-2 landscape:py-0.5 z-40">
-             <div className="flex items-center gap-2 text-zinc-400">
-                <HistoryIcon size={12} /> Gần đây:
-             </div>
-             <div className="flex gap-1 overflow-hidden">
-                {history.slice(0, 15).map((h, i) => (
-                    <div key={i} className={`w-4 h-4 rounded-full text-[9px] flex items-center justify-center font-bold ${h.isTriple ? 'bg-green-600' : h.sum >= 11 ? 'bg-red-600' : 'bg-blue-600'}`}>
-                        {h.sum >= 11 && !h.isTriple ? 'L' : h.sum <= 10 && !h.isTriple ? 'N' : 'B'}
-                    </div>
-                ))}
-             </div>
-             <div className="flex items-center gap-2">
-               {comboCount > 0 && (
-                 <div className="text-orange-400 font-bold animate-pulse flex items-center gap-1">
-                   🔥 <span>{comboCount}x</span>
-                 </div>
-               )}
-               {bettingTimeLeft > 0 && (gameState === 'IDLE' || gameState === 'REVEALED') && !isAutoPlaying && (
-                 <div className={`font-bold flex items-center gap-1 ${
-                   bettingTimeLeft <= 3 ? 'text-red-400 animate-pulse' : 'text-yellow-400'
-                 }`}>
-                   ⏱️ {Math.ceil(bettingTimeLeft)}s
-                 </div>
-               )}
-               <div className="text-yellow-200 font-bold">
-                 {gameState === 'IDLE' ? 'MỞ CỬA CƯỢC' : gameState === 'ROLLING' ? 'ĐANG LẮC' : gameState === 'SHAKING' ? 'ĐANG LẮC' : gameState === 'READY_TO_OPEN' ? 'SẴN SÀNG MỞ' : 'ĐÃ MỞ'}
-               </div>
-             </div>
-        </div>
-        
+        {/* Close utilities menu when clicking outside */}
+        {isUtilitiesOpen && (
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setIsUtilitiesOpen(false)}
+          />
+        )}
+
         {/* Main Game Area - Responsive Grid Layout */}
-        <div className="w-full max-w-6xl px-2 md:px-4 mt-16 md:mt-20 mb-2 md:mb-4 shrink-0 relative">
+        <div className="w-full max-w-6xl px-2 md:px-4 mt-16 md:mt-20 mb-2 md:mb-4 shrink-0 relative pb-20">
           {/* Responsive grid for game elements */}
           <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-4 md:gap-6 items-start">
             {/* Left: Chip Selection */}
@@ -846,66 +1043,13 @@ const App: React.FC = () => {
                 </span>
               </button>
 
-              {/* Utils */}
-              <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
-                <button 
-                  onClick={() => { if (soundEnabled) playSound('button'); clearBets(); }} 
-                  className="flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-zinc-800 rounded-lg border border-zinc-600 active:bg-zinc-700"
-                >
-                  <X size={12} className="text-red-500 mb-0.5" />
-                  <span className="text-[8px] sm:text-[9px] md:text-[10px] text-zinc-400 font-bold">XÓA</span>
-                </button>
-
-                <button 
-                  onClick={() => { if (soundEnabled) playSound('button'); toggleAutoPlay(); }} 
-                  className={`flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg border active:brightness-90 ${isAutoPlaying ? 'bg-green-900 border-green-500' : 'bg-[#14532d] border-[#166534]'}`}
-                >
-                  {isAutoPlaying ? <StopCircle size={12} className="text-white mb-0.5" /> : <Play size={12} className="text-white mb-0.5" />}
-                  <span className="text-[8px] sm:text-[9px] md:text-[10px] text-green-100 font-bold">TỰ ĐỘNG</span>
-                </button>
-
-                <button 
-                  onClick={() => { if (soundEnabled) playSound('button'); handleAiAdvice(); }}
-                  className="flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-purple-900/80 rounded-lg border border-purple-600 active:bg-purple-800"
-                >
-                  <BrainCircuit size={12} className={`text-purple-300 mb-0.5 ${isLoadingAi ? 'animate-spin' : ''}`} />
-                  <span className="text-[8px] sm:text-[9px] md:text-[10px] text-purple-200 font-bold">AI</span>
-                </button>
-
-                <button 
-                  onClick={() => { if (soundEnabled) playSound('button'); setShowStats(true); }}
-                  className="flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-blue-900/80 rounded-lg border border-blue-600 active:bg-blue-800"
-                >
-                  <BarChart3 size={12} className="text-blue-300 mb-0.5" />
-                  <span className="text-[8px] sm:text-[9px] md:text-[10px] text-blue-200 font-bold">THỐNG KÊ</span>
-                </button>
-
-                <button 
-                  onClick={() => { if (soundEnabled) playSound('button'); setShowSettings(true); }}
-                  className="flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-zinc-800 rounded-lg border border-zinc-600 active:bg-zinc-700"
-                >
-                  <Settings size={12} className="text-zinc-300 mb-0.5" />
-                  <span className="text-[8px] sm:text-[9px] md:text-[10px] text-zinc-200 font-bold">CÀI ĐẶT</span>
-                </button>
-
-                <button 
-                  onClick={() => { if (soundEnabled) playSound('button'); setShowDailyChallenge(!showDailyChallenge); }}
-                  className={`flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg border active:brightness-90 ${
-                    showDailyChallenge 
-                      ? 'bg-yellow-900 border-yellow-500' 
-                      : 'bg-yellow-900/50 border-yellow-600/50'
-                  }`}
-                >
-                  <Target size={12} className="text-yellow-300 mb-0.5" />
-                  <span className="text-[8px] sm:text-[9px] md:text-[10px] text-yellow-200 font-bold">HÀNG NGÀY</span>
-                </button>
-              </div>
+              {/* Removed the old individual buttons since they're now in the utilities menu */}
             </div>
           </div>
         </div>
 
         {/* Betting Board */}
-        <div className="mt-auto w-full pb-2">
+        <div className="mt-auto w-full pb-2 md:pb-4">
           <BettingTable 
               bets={currentBets} 
               onBet={handleBet} 
