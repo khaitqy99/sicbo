@@ -741,9 +741,9 @@ const App: React.FC = () => {
 
                 {/* Dice */}
                 <div className="perspective-1000 relative w-[200px] h-[200px] sm:w-[240px] sm:h-[240px] md:w-[320px] md:h-[320px] flex items-center justify-center z-10">
-                  <div className={`absolute top-4 left-1/2 -translate-x-1/2 scale-[0.7] sm:scale-[0.8] md:scale-[0.9] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[0]} rollId={rollId} /></div>
-                  <div className={`absolute bottom-4 left-4 scale-[0.7] sm:scale-[0.8] md:scale-[0.9] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[1]} rollId={rollId} /></div>
-                  <div className={`absolute bottom-4 right-4 scale-[0.7] sm:scale-[0.8] md:scale-[0.9] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[2]} rollId={rollId} /></div>
+                  <div className={`absolute top-4 left-1/2 -translate-x-1/2 -translate-y-1/2 scale-[0.7] sm:scale-[0.8] md:scale-[0.9] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[0]} rollId={rollId} /></div>
+                  <div className={`absolute bottom-4 left-1/4 -translate-x-1/2 translate-y-1/2 scale-[0.7] sm:scale-[0.8] md:scale-[0.9] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[1]} rollId={rollId} /></div>
+                  <div className={`absolute bottom-4 right-1/4 translate-x-1/2 translate-y-1/2 scale-[0.7] sm:scale-[0.8] md:scale-[0.9] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[2]} rollId={rollId} /></div>
                 </div>
 
                 {/* Bowl (Z-Index handled inside) */}
