@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Volume2, VolumeX, Zap, Save, Clock } from 'lucide-react';
+import { Settings, Volume2, VolumeX, Zap, Save } from 'lucide-react';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -8,8 +8,6 @@ interface SettingsPanelProps {
   onSoundToggle: (enabled: boolean) => void;
   animationSpeed: number;
   onAnimationSpeedChange: (speed: number) => void;
-  bettingSessionDuration: number;
-  onBettingSessionDurationChange: (duration: number) => void;
   onSaveGame: () => void;
   onLoadGame: () => void;
   onResetGame: () => void;
@@ -22,8 +20,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onSoundToggle,
   animationSpeed,
   onAnimationSpeedChange,
-  bettingSessionDuration,
-  onBettingSessionDurationChange,
   onSaveGame,
   onLoadGame,
   onResetGame,
@@ -82,32 +78,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               </div>
               <div className="text-xs text-white/60 text-center">
                 {animationSpeed < 1 ? 'Chậm Hơn' : animationSpeed > 1 ? 'Nhanh Hơn' : 'Bình Thường'}
-              </div>
-            </div>
-          </SettingSection>
-
-          <SettingSection title="Thời Gian Đặt Cược">
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <Clock size={16} className="text-yellow-400" />
-                <select
-                  value={bettingSessionDuration}
-                  onChange={(e) => onBettingSessionDurationChange(Number(e.target.value))}
-                  className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-yellow-600"
-                >
-                  <option value={0}>Tắt (Thủ công)</option>
-                  <option value={10}>10 giây</option>
-                  <option value={15}>15 giây</option>
-                  <option value={20}>20 giây</option>
-                  <option value={30}>30 giây</option>
-                  <option value={45}>45 giây</option>
-                  <option value={60}>60 giây</option>
-                </select>
-              </div>
-              <div className="text-xs text-white/60 text-center">
-                {bettingSessionDuration === 0 
-                  ? 'Bạn cần bấm nút LẮC để roll' 
-                  : `Tự động roll sau ${bettingSessionDuration} giây`}
               </div>
             </div>
           </SettingSection>

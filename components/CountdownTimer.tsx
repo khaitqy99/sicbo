@@ -4,35 +4,49 @@ interface CountdownTimerProps {
   duration: number;
   onComplete: () => void;
   active: boolean;
+  timeLeft?: number; // Optional controlled timeLeft from parent
 }
 
-const CountdownTimer: React.FC<CountdownTimerProps> = ({ duration, onComplete, active }) => {
-  const [timeLeft, setTimeLeft] = useState(duration);
+const CountdownTimer: React.FC<CountdownTimerProps> = ({ duration, onComplete, active, timeLeft: controlledTimeLeft }) => {
+  const [internalTimeLeft, setInternalTimeLeft] = useState(duration);
+  const timeLeft = controlledTimeLeft !== undefined ? controlledTimeLeft : internalTimeLeft;
+
+  // Handle controlled timeLeft reaching 0
+  useEffect(() => {
+    if (active && controlledTimeLeft !== undefined && controlledTimeLeft <= 0) {
+      onComplete();
+    }
+  }, [active, controlledTimeLeft, onComplete]);
 
   useEffect(() => {
     if (!active) {
-      setTimeLeft(duration);
+      if (controlledTimeLeft === undefined) {
+        setInternalTimeLeft(duration);
+      }
       return;
     }
 
-    if (timeLeft <= 0) {
-      onComplete();
-      return;
+    // Only manage internal timer if not controlled
+    if (controlledTimeLeft === undefined) {
+      if (internalTimeLeft <= 0) {
+        onComplete();
+        return;
+      }
+
+      const timer = setInterval(() => {
+        setInternalTimeLeft(prev => {
+          if (prev <= 0) {
+            clearInterval(timer);
+            onComplete();
+            return 0;
+          }
+          return prev - 0.1;
+        });
+      }, 100);
+
+      return () => clearInterval(timer);
     }
-
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 0) {
-          clearInterval(timer);
-          onComplete();
-          return 0;
-        }
-        return prev - 0.1;
-      });
-    }, 100);
-
-    return () => clearInterval(timer);
-  }, [active, timeLeft, onComplete, duration]);
+  }, [active, internalTimeLeft, onComplete, duration, controlledTimeLeft]);
 
   if (!active || timeLeft <= 0) return null;
 

@@ -13,6 +13,7 @@ import RippleEffect from './components/RippleEffect';
 import ChipParticle from './components/ChipParticle';
 
 import BigWinCelebration from './components/BigWinCelebration';
+import CountdownTimer from './components/CountdownTimer';
 import { BetArea, GameStats, RollResult, StrategyType } from './types';
 import { CHIP_VALUES, INITIAL_BALANCE, PAYOUTS } from './constants';
 import { playSound } from './utils/sound';
@@ -92,19 +93,30 @@ const App: React.FC = () => {
   const [jackpotProgress, setJackpotProgress] = useState(0);
   const [showQuickBet, setShowQuickBet] = useState(false);
 
-  // Betting Session Timer
-  const [bettingSessionDuration, setBettingSessionDuration] = useState<number>(0); // seconds, 0 = disabled
-  const [bettingTimeLeft, setBettingTimeLeft] = useState<number>(0);
+  // Session Management
+  const [isSessionActive, setIsSessionActive] = useState(false);
+  const [sessionTimeLeft, setSessionTimeLeft] = useState(60);
+  const [isBettingPhase, setIsBettingPhase] = useState(false);
+  const [bettingTimeLeft, setBettingTimeLeft] = useState(15);
+  const SESSION_DURATION = 60; // 60 seconds
+  const BETTING_DURATION = 15; // 15 seconds for betting
+  const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sessionAutoRollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bettingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const bettingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const autoPlayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startBettingPhaseRef = useRef<(() => void) | null>(null);
 
   // --- Logic Same as Before ---
   const handleBet = (area: BetArea, multiplier: number = 1) => {
-    // Prevent betting during roll states or when bets are locked
-    if (gameState !== 'IDLE' && gameState !== 'REVEALED') return;
+    // Allow betting during IDLE, REVEALED, or BETTING phase (in session)
+    if (gameState !== 'IDLE' && gameState !== 'REVEALED') {
+      // Only allow betting during betting phase if session is active
+      if (!(isSessionActive && isBettingPhase)) return;
+    }
     if (isAutoPlaying) return;
-    if (betsLocked) return;
+    if (betsLocked && !isBettingPhase) return; // Allow betting during betting phase
     
     const betAmount = Math.floor(selectedChip * multiplier);
     if (betAmount <= 0) return;
@@ -161,10 +173,13 @@ const App: React.FC = () => {
   };
 
   const clearBets = () => {
-    // Prevent clearing bets during roll states or when bets are locked
-    if (gameState !== 'IDLE' && gameState !== 'REVEALED') return;
+    // Allow clearing bets during IDLE, REVEALED, or BETTING phase (in session)
+    if (gameState !== 'IDLE' && gameState !== 'REVEALED') {
+      // Only allow clearing during betting phase if session is active
+      if (!(isSessionActive && isBettingPhase)) return;
+    }
     if (isAutoPlaying) return;
-    if (betsLocked) return; // Prevent clearing locked bets
+    if (betsLocked && !isBettingPhase) return; // Allow clearing during betting phase
     
     const totalBet = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
     if (totalBet > 0) {
@@ -284,14 +299,16 @@ const App: React.FC = () => {
     const totalBetAmount = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
     
     // Allow rolling without bets as per game design
-    if (totalBetAmount > 0 && totalBetAmount < MIN_BET_AMOUNT && !isAutoPlaying) {
+    if (totalBetAmount > 0 && totalBetAmount < MIN_BET_AMOUNT && !isAutoPlaying && !isSessionActive) {
       alert(`Cược tối thiểu là ${MIN_BET_AMOUNT}!`);
       return;
     }
     
     // Validate balance is sufficient
     if (totalBetAmount > balance) {
-      alert("Số dư không đủ!");
+      if (!isSessionActive) {
+        alert("Số dư không đủ!");
+      }
       return;
     }
     
@@ -321,12 +338,15 @@ const App: React.FC = () => {
         setTimeout(() => {
             setGameState('READY_TO_OPEN');
             if (soundEnabled) playSound('reveal');
-            if (isAutoPlaying) setTimeout(revealResult, 300); // Faster reveal for auto-play
+            // Auto reveal for session or auto-play
+            if (isAutoPlaying || isSessionActive) {
+              setTimeout(revealResult, 300);
+            }
         }, 1000 / animationSpeed);
     }, 2000 / animationSpeed);
-  }, [currentBets, isAutoPlaying, soundEnabled, animationSpeed, lastRollTime, balance]);
+  }, [currentBets, isAutoPlaying, soundEnabled, animationSpeed, lastRollTime, balance, isSessionActive]);
 
-  const revealResult = () => {
+  const revealResult = useCallback(() => {
     if (!pendingResult) return;
     const { dice: finalDice, resultEntry } = pendingResult;
     const totalBetAmount = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
@@ -480,68 +500,155 @@ const App: React.FC = () => {
       setJackpotProgress(prev => Math.max(prev - 1, 0));
     }
     
-    // Show win result longer - 4 seconds for manual play, 1.5 seconds for auto play (faster)
-    const displayDuration = isAutoPlaying ? 1500 : 4000;
+    // Show win result longer - 4 seconds for manual play, 1.5 seconds for auto play or session (faster)
+    const displayDuration = (isAutoPlaying || isSessionActive) ? 1500 : 4000;
     setTimeout(() => { 
       setGameState('IDLE');
-      // Unlock bets when game returns to IDLE
-      setBetsLocked(false);
       // Keep win amount visible a bit longer after state changes
       if (totalWin > 0) {
         setTimeout(() => setLastWinAmount(0), 500);
       }
+      
+      // If session is active, start betting phase after reveal
+      if (isSessionActive && startBettingPhaseRef.current) {
+        startBettingPhaseRef.current();
+      } else {
+        // Unlock bets when game returns to IDLE (only if not in session)
+        setBetsLocked(false);
+      }
     }, displayDuration);
-  };
+  }, [pendingResult, currentBets, comboCount, comboMultiplier, stats, unlockedAchievements, isAutoPlaying, isSessionActive, balance]);
 
-  // Betting Session Timer - Auto roll when time runs out
-  useEffect(() => {
-    // Clear existing timer
+  // Session Management Functions
+  const startSession = useCallback(() => {
+    // Stop auto-play if active
+    if (isAutoPlaying) {
+      setIsAutoPlaying(false);
+    }
+    
+    setIsSessionActive(true);
+    setSessionTimeLeft(SESSION_DURATION);
+    setIsBettingPhase(false);
+    setBettingTimeLeft(BETTING_DURATION);
+    
+    // Clear any existing bets
+    const totalBet = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
+    if (totalBet > 0) {
+      setBalance(prev => prev + totalBet);
+      setCurrentBets({});
+    }
+    
+    // Start the first roll immediately (roll ngay khi bắt đầu phiên)
+    if (gameState === 'IDLE' || gameState === 'REVEALED') {
+      // Small delay to ensure state is set
+      setTimeout(() => {
+        startRoll();
+      }, 100);
+    }
+  }, [gameState, startRoll, currentBets, isAutoPlaying]);
+
+  const stopSession = useCallback(() => {
+    setIsSessionActive(false);
+    setIsBettingPhase(false);
+    setSessionTimeLeft(SESSION_DURATION);
+    setBettingTimeLeft(BETTING_DURATION);
+    if (sessionTimerRef.current) {
+      clearInterval(sessionTimerRef.current);
+      sessionTimerRef.current = null;
+    }
+    if (sessionAutoRollRef.current) {
+      clearTimeout(sessionAutoRollRef.current);
+      sessionAutoRollRef.current = null;
+    }
     if (bettingTimerRef.current) {
       clearInterval(bettingTimerRef.current);
       bettingTimerRef.current = null;
     }
-
-    // Only run timer if:
-    // - Betting session duration is enabled (> 0)
-    // - Game is in IDLE or REVEALED state (can place bets)
-    // - Not in auto-play mode
-    // - Bets are not locked
-    if (
-      bettingSessionDuration > 0 &&
-      (gameState === 'IDLE' || gameState === 'REVEALED') &&
-      !isAutoPlaying &&
-      !betsLocked
-    ) {
-      // Reset timer when entering betting state
-      setBettingTimeLeft(bettingSessionDuration);
-
-      // Start countdown
-      bettingTimerRef.current = setInterval(() => {
-        setBettingTimeLeft(prev => {
-          if (prev <= 0.1) {
-            // Time's up - auto roll
-            const totalBetAmount = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
-            if (totalBetAmount >= MIN_BET_AMOUNT || totalBetAmount === 0) {
-              // Only auto roll if minimum bet is met or no bets placed
-              startRoll();
-            }
-            return 0;
-          }
-          return prev - 0.1;
-        });
-      }, 100); // Update every 100ms
-    } else {
-      // Reset timer when not in betting state
-      setBettingTimeLeft(0);
+    if (bettingTimeoutRef.current) {
+      clearTimeout(bettingTimeoutRef.current);
+      bettingTimeoutRef.current = null;
     }
+  }, []);
 
-    return () => {
+  // Start betting phase after reveal
+  const startBettingPhase = useCallback(() => {
+    if (!isSessionActive) return;
+    
+    setIsBettingPhase(true);
+    setBettingTimeLeft(BETTING_DURATION);
+    setBetsLocked(false); // Allow betting during betting phase
+    
+    // Clear any existing timers
+    if (bettingTimerRef.current) {
+      clearInterval(bettingTimerRef.current);
+      bettingTimerRef.current = null;
+    }
+    if (bettingTimeoutRef.current) {
+      clearTimeout(bettingTimeoutRef.current);
+      bettingTimeoutRef.current = null;
+    }
+    
+    // Start betting timer
+    bettingTimerRef.current = setInterval(() => {
+      setBettingTimeLeft(prev => {
+        if (prev <= 0.1) {
+          if (bettingTimerRef.current) {
+            clearInterval(bettingTimerRef.current);
+            bettingTimerRef.current = null;
+          }
+          return 0;
+        }
+        return prev - 0.1;
+      });
+    }, 100);
+    
+    // Auto roll after betting time ends
+    bettingTimeoutRef.current = setTimeout(() => {
+      setIsBettingPhase(false);
+      setBetsLocked(true); // Lock bets when rolling starts
       if (bettingTimerRef.current) {
         clearInterval(bettingTimerRef.current);
         bettingTimerRef.current = null;
       }
+      // Auto roll after betting phase (only if session is still active and has time left)
+      if (isSessionActive && sessionTimeLeft > 0) {
+        startRoll();
+      }
+    }, BETTING_DURATION * 1000);
+  }, [isSessionActive, sessionTimeLeft, startRoll]);
+
+  // Store startBettingPhase in ref for use in revealResult
+  useEffect(() => {
+    startBettingPhaseRef.current = startBettingPhase;
+  }, [startBettingPhase]);
+
+  // Session Timer Effect
+  useEffect(() => {
+    if (isSessionActive) {
+      sessionTimerRef.current = setInterval(() => {
+        setSessionTimeLeft(prev => {
+          if (prev <= 0.1) {
+            stopSession();
+            return 0;
+          }
+          return prev - 0.1;
+        });
+      }, 100);
+    } else {
+      if (sessionTimerRef.current) {
+        clearInterval(sessionTimerRef.current);
+        sessionTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (sessionTimerRef.current) {
+        clearInterval(sessionTimerRef.current);
+      }
     };
-  }, [gameState, bettingSessionDuration, isAutoPlaying, betsLocked, currentBets, startRoll]);
+  }, [isSessionActive, stopSession]);
+
+  // Note: Auto roll during session is now handled by betting phase timeout
+  // No need for separate auto roll effect
 
   useEffect(() => {
     if (isAutoPlaying && gameState === 'IDLE') {
@@ -799,6 +906,34 @@ const App: React.FC = () => {
                     <span className="text-yellow-200 text-sm">Clear Bets</span>
                   </button>
                   
+                  {/* Session Play - 60 seconds auto roll */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isSessionActive) {
+                        stopSession();
+                      } else {
+                        startSession();
+                      }
+                      setIsUtilitiesOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2 p-2 rounded transition-colors ${
+                      isSessionActive ? 'hover:bg-red-900/50 bg-red-900/30' : 'hover:bg-blue-900/50'
+                    }`}
+                  >
+                    {isSessionActive ? (
+                      <>
+                        <StopCircle size={16} className="text-red-400" />
+                        <span className="text-yellow-200 text-sm">Dừng Phiên (60s)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play size={16} className="text-blue-400" />
+                        <span className="text-yellow-200 text-sm">Bắt Đầu Phiên (60s)</span>
+                      </>
+                    )}
+                  </button>
+                  
                   {/* Auto Play */}
                   <button 
                     onClick={(e) => {
@@ -809,6 +944,7 @@ const App: React.FC = () => {
                     className={`w-full flex items-center gap-2 p-2 rounded transition-colors ${
                       isAutoPlaying ? 'hover:bg-red-900/50' : 'hover:bg-green-900/50'
                     }`}
+                    disabled={isSessionActive}
                   >
                     {isAutoPlaying ? (
                       <>
@@ -880,6 +1016,14 @@ const App: React.FC = () => {
             )}
           </div>
           
+          {/* Session Status */}
+          {isSessionActive && (
+            <div className="bg-blue-600/80 border border-blue-400 rounded-full px-3 py-1 flex items-center gap-2 min-w-[100px] shadow-inner animate-pulse">
+              <Play size={12} className="text-blue-200" />
+              <span className="text-blue-100 font-mono font-bold text-sm">Phiên: {Math.ceil(sessionTimeLeft)}s</span>
+            </div>
+          )}
+          
           {/* Balance Display */}
           <div className="bg-black/60 border border-yellow-600/50 rounded-full px-3 py-1 flex items-center gap-2 min-w-[120px] shadow-inner">
             <Wallet size={14} className="text-yellow-500" />
@@ -896,38 +1040,9 @@ const App: React.FC = () => {
         )}
 
         {/* Main Game Area - Responsive Grid Layout */}
-        <div className="w-full max-w-6xl px-2 md:px-4 mt-16 md:mt-20 mb-2 md:mb-4 shrink-0 relative pb-20">
+        <div className="w-full max-w-6xl px-2 md:px-4 mt-16 md:mt-20 mb-2 md:mb-4 shrink-0 relative pb-2 md:pb-4">
           {/* Responsive grid for game elements */}
-          <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-4 md:gap-6 items-start">
-            {/* Left: Chip Selection */}
-            <div className="flex md:flex-col gap-2 md:gap-3 justify-center md:justify-start mt-2">
-              <div className="rounded-lg p-1 md:p-2">
-                <div className="flex md:flex-col gap-2 md:gap-3">
-                  {CHIP_VALUES.map(val => (
-                    <button
-                      key={val}
-                      onClick={() => setSelectedChip(val)}
-                      disabled={gameState !== 'IDLE' && gameState !== 'REVEALED'}
-                      className={`
-                        relative w-10 h-10 md:w-12 md:h-12 rounded-full shrink-0 transition-all active:scale-95
-                        ${selectedChip === val ? '-translate-y-1 ring-2 ring-yellow-400 z-10' : 'hover:-translate-y-0.5 opacity-90'}
-                      `}
-                    >
-                      {/* Chip Visual */}
-                      <div 
-                        className={`w-full h-full rounded-full border-[3px] border-dashed border-white/30 flex items-center justify-center text-[10px] md:text-xs font-bold text-white shadow-md`}
-                        style={{ background: val >= 1000 ? '#eab308' : val >= 100 ? '#dc2626' : '#2563eb' }}
-                      >
-                        <div className="bg-black/20 w-[80%] h-[80%] rounded-full flex items-center justify-center border border-white/10">
-                          {val >= 1000 ? val/1000 + 'k' : val}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 md:gap-6 items-start">
             {/* Center: Game Stage (Dice & Bowl) - Maintains aspect ratio */}
             <div className="flex items-center justify-center">
               <div className="relative w-full aspect-square game-stage-container flex items-center justify-center">
@@ -954,6 +1069,26 @@ const App: React.FC = () => {
                       }} 
                     />
                   </>
+                )}
+
+                {/* Betting Phase Countdown Timer */}
+                {isSessionActive && isBettingPhase && (
+                  <CountdownTimer 
+                    duration={BETTING_DURATION}
+                    onComplete={() => {}}
+                    active={isBettingPhase}
+                    timeLeft={bettingTimeLeft}
+                  />
+                )}
+                
+                {/* Session Countdown Timer (only show when not in betting phase) */}
+                {isSessionActive && !isBettingPhase && (
+                  <CountdownTimer 
+                    duration={SESSION_DURATION}
+                    onComplete={stopSession}
+                    active={isSessionActive}
+                    timeLeft={sessionTimeLeft}
+                  />
                 )}
 
                 {/* Notifications */}
@@ -1023,25 +1158,6 @@ const App: React.FC = () => {
                   </button>
                 </div>
               )}
-              
-              {/* ROLL Button */}
-              <button
-                onClick={() => { if (soundEnabled) playSound('button'); startRoll(); }}
-                disabled={gameState !== 'IDLE' && gameState !== 'REVEALED'}
-                className={`
-                  w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full 
-                  bg-gradient-to-b from-yellow-400 to-yellow-700
-                  border-2 md:border-4 border-[#451a03]
-                  shadow-[0_4px_0_#270e01,0_0_15px_rgba(234,179,8,0.3)]
-                  flex items-center justify-center
-                  active:shadow-none active:translate-y-1 transition-all button-glow
-                  ${gameState !== 'IDLE' && gameState !== 'REVEALED' ? 'opacity-80 grayscale-[0.5]' : 'hover:brightness-110 hover:scale-105'}
-                `}
-              >
-                <span className="font-bold text-[#451a03] text-xs sm:text-sm md:text-lg font-serif tracking-wide">
-                  {gameState === 'READY_TO_OPEN' ? 'MỞ' : 'LẮC'}
-                </span>
-              </button>
 
               {/* Removed the old individual buttons since they're now in the utilities menu */}
             </div>
@@ -1049,11 +1165,40 @@ const App: React.FC = () => {
         </div>
 
         {/* Betting Board */}
-        <div className="mt-auto w-full pb-2 md:pb-4">
+        <div className="mt-0 md:mt-2 w-full pb-2 md:pb-4">
+          {/* Chip Selection - Above BettingTable */}
+          <div className="flex gap-2 md:gap-3 justify-center mb-3 md:mb-4">
+            <div className="rounded-lg p-1 md:p-2">
+              <div className="flex gap-2 md:gap-3">
+                {CHIP_VALUES.map(val => (
+                  <button
+                    key={val}
+                    onClick={() => setSelectedChip(val)}
+                    disabled={!(gameState === 'IDLE' || gameState === 'REVEALED' || (isSessionActive && isBettingPhase))}
+                    className={`
+                      relative w-10 h-10 md:w-12 md:h-12 rounded-full shrink-0 transition-all active:scale-95
+                      ${selectedChip === val ? '-translate-y-1 ring-2 ring-yellow-400 z-10' : 'hover:-translate-y-0.5 opacity-90'}
+                    `}
+                  >
+                    {/* Chip Visual */}
+                    <div 
+                      className={`w-full h-full rounded-full border-[3px] border-dashed border-white/30 flex items-center justify-center text-[10px] md:text-xs font-bold text-white shadow-md`}
+                      style={{ background: val >= 1000 ? '#eab308' : val >= 100 ? '#dc2626' : '#2563eb' }}
+                    >
+                      <div className="bg-black/20 w-[80%] h-[80%] rounded-full flex items-center justify-center border border-white/10">
+                        {val >= 1000 ? val/1000 + 'k' : val}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          
           <BettingTable 
               bets={currentBets} 
               onBet={handleBet} 
-              disabled={gameState !== 'IDLE' && gameState !== 'REVEALED'} 
+              disabled={!(gameState === 'IDLE' || gameState === 'REVEALED' || (isSessionActive && isBettingPhase))} 
               lastWinAreas={gameState === 'REVEALED' ? lastWinAreas : []}
               onRipple={(x, y) => {
                 const newRipple = {
@@ -1064,6 +1209,17 @@ const App: React.FC = () => {
                 setRipples(prev => [...prev, newRipple]);
               }}
           />
+          
+          {/* Betting Phase Notice */}
+          {isSessionActive && isBettingPhase && (
+            <div className="mt-2 text-center">
+              <div className="inline-block bg-blue-600/80 border border-blue-400 rounded-lg px-4 py-2 animate-pulse">
+                <span className="text-blue-100 font-bold text-sm md:text-base">
+                  ⏱️ Thời gian đặt cược: {Math.ceil(bettingTimeLeft)}s
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1166,8 +1322,6 @@ const App: React.FC = () => {
         onSoundToggle={setSoundEnabled}
         animationSpeed={animationSpeed}
         onAnimationSpeedChange={setAnimationSpeed}
-        bettingSessionDuration={bettingSessionDuration}
-        onBettingSessionDurationChange={setBettingSessionDuration}
         onSaveGame={handleSaveGame}
         onLoadGame={handleLoadGame}
         onResetGame={handleResetGame}
