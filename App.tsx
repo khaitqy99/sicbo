@@ -741,9 +741,9 @@ const App: React.FC = () => {
 
                 {/* Dice */}
                 <div className="perspective-1000 relative w-[180px] h-[180px] sm:w-[200px] sm:h-[200px] md:w-[280px] md:h-[280px] flex items-center justify-center z-10">
-                  <div className={`absolute top-4 left-1/2 -translate-x-1/2 -translate-y-1/2 scale-[0.6] sm:scale-[0.7] md:scale-[0.8] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[0]} rollId={rollId} /></div>
-                  <div className={`absolute bottom-4 left-1/4 -translate-x-1/2 translate-y-1/2 scale-[0.6] sm:scale-[0.7] md:scale-[0.8] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[1]} rollId={rollId} /></div>
-                  <div className={`absolute bottom-4 right-1/4 translate-x-1/2 translate-y-1/2 scale-[0.6] sm:scale-[0.7] md:scale-[0.8] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[2]} rollId={rollId} /></div>
+                  <div className={`absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 scale-[0.6] sm:scale-[0.7] md:scale-[0.8] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[0]} rollId={rollId} /></div>
+                  <div className={`absolute bottom-1/4 left-1/4 -translate-x-1/2 translate-y-1/2 scale-[0.6] sm:scale-[0.7] md:scale-[0.8] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[1]} rollId={rollId} /></div>
+                  <div className={`absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 scale-[0.6] sm:scale-[0.7] md:scale-[0.8] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[2]} rollId={rollId} /></div>
                 </div>
 
                 {/* Bowl (Z-Index handled inside) */}

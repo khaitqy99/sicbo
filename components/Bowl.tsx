@@ -65,7 +65,7 @@ const Bowl: React.FC<BowlProps> = ({ gameState, onOpen }) => {
         onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
         onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
         className={`
-          relative w-[280px] h-[280px] md:w-[370px] md:h-[370px] landscape:w-[220px] landscape:h-[220px] rounded-full 
+          relative w-full h-full rounded-full 
           pointer-events-auto flex items-center justify-center select-none
           ${isShaking ? 'animate-shake-bowl' : ''}
           ${!isDragging && !isShaking ? 'transition-all duration-300 ease-out' : ''} 
