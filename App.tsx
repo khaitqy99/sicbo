@@ -307,9 +307,10 @@ const App: React.FC = () => {
       setConfettiTrigger(prev => prev + 1);
       if (totalWin > 10000) {
         setConfettiType('bigWin');
-        setShowBigWinCelebration(true);
-        setBigWinAmount(totalWin);
-        setBigWinMultiplier(Math.floor(totalWin / Object.values(currentBets).reduce((s, a) => s + a, 0)));
+        // Big Win Celebration dialog disabled
+        // setShowBigWinCelebration(true);
+        // setBigWinAmount(totalWin);
+        // setBigWinMultiplier(Math.floor(totalWin / Object.values(currentBets).reduce((s, a) => s + a, 0)));
       } else if (triple) {
         setConfettiType('triple');
       } else {
@@ -871,14 +872,14 @@ const App: React.FC = () => {
         />
       ))}
 
-      {/* Big Win Celebration */}
-      {showBigWinCelebration && (
+      {/* Big Win Celebration - Disabled */}
+      {/* {showBigWinCelebration && (
         <BigWinCelebration
           amount={bigWinAmount}
           multiplier={bigWinMultiplier}
           onComplete={() => setShowBigWinCelebration(false)}
         />
-      )}
+      )} */}
 
       {/* Statistics Panel */}
       <StatisticsPanel
