@@ -3,9 +3,10 @@ import React, { useEffect, useState, useRef } from 'react';
 interface DiceProps {
   value: number;
   rollId: number; // Used to trigger new rolls even if value is same
+  continuousRoll?: boolean; // Keep rolling continuously
 }
 
-const Dice: React.FC<DiceProps> = ({ value, rollId }) => {
+const Dice: React.FC<DiceProps> = ({ value, rollId, continuousRoll = false }) => {
   // We use a fixed internal size for 3D math (100px), then scale via CSS
   const size = 100; 
   const translateZ = size / 2;
@@ -13,43 +14,75 @@ const Dice: React.FC<DiceProps> = ({ value, rollId }) => {
   // Track rotation state
   const [rotation, setRotation] = useState({ x: 0, y: 0, z: 0 });
   const rotationRef = useRef({ x: 0, y: 0, z: 0 });
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Continuous rolling effect
   useEffect(() => {
-      // Logic to spin to the target face
-      // 1. Calculate the base rotation needed for the target face
-      let targetX = 0;
-      let targetY = 0;
+    if (continuousRoll) {
+      // Start continuous rolling
+      intervalRef.current = setInterval(() => {
+        const currentX = rotationRef.current.x;
+        const currentY = rotationRef.current.y;
+        
+        // Add continuous spins
+        const newX = currentX + 360 * 2; // 2 full rotations
+        const newY = currentY + 360 * 2;
+        
+        const finalRotation = { x: newX, y: newY, z: 0 };
+        setRotation(finalRotation);
+        rotationRef.current = finalRotation;
+      }, 1000); // Every 1 second, add more rotation
       
-      // Standard mapping (assuming initial front is 1)
-      switch (value) {
-        case 1: targetX = 0; targetY = 0; break;       // Front
-        case 6: targetX = 180; targetY = 0; break;     // Back
-        case 2: targetX = 0; targetY = -90; break;     // Right (Face 2 visual is Left in CSS -90Y)
-        case 5: targetX = 0; targetY = 90; break;      // Left (Face 5 visual is Right in CSS +90Y)
-        case 3: targetX = -90; targetY = 0; break;     // Top (Face 3 visual is Top -90X)
-        case 4: targetX = 90; targetY = 0; break;      // Bottom (Face 4 visual is Bottom +90X)
-      }
+      return () => {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+      };
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, [continuousRoll]);
 
-      // 2. Add extra random full spins to the CURRENT rotation to simulate a long roll
-      const currentX = rotationRef.current.x;
-      const currentY = rotationRef.current.y;
-      
-      // Randomize spins (High number for 2 seconds of fast spinning)
-      // Use ease-linear CSS to ensure it doesn't slow down.
-      const spinsX = 8 + Math.floor(Math.random() * 8); 
-      const spinsY = 8 + Math.floor(Math.random() * 8);
-      
-      // Calculate new target. 
-      // Logic: Take current, add spins, add target offset, remove previous modulo drift
-      // Ideally: Base + Spins + Target.
-      const newX = currentX + (spinsX * 360) + (targetX - (currentX % 360));
-      const newY = currentY + (spinsY * 360) + (targetY - (currentY % 360));
-      
-      const finalRotation = { x: newX, y: newY, z: 0 };
-      setRotation(finalRotation);
-      rotationRef.current = finalRotation;
-      
-  }, [rollId, value]); // Trigger whenever rollId changes
+  // Normal roll to specific value
+  useEffect(() => {
+    if (continuousRoll) return; // Don't interfere with continuous roll
+    
+    // Logic to spin to the target face
+    // 1. Calculate the base rotation needed for the target face
+    let targetX = 0;
+    let targetY = 0;
+    
+    // Standard mapping (assuming initial front is 1)
+    switch (value) {
+      case 1: targetX = 0; targetY = 0; break;       // Front
+      case 6: targetX = 180; targetY = 0; break;     // Back
+      case 2: targetX = 0; targetY = -90; break;     // Right (Face 2 visual is Left in CSS -90Y)
+      case 5: targetX = 0; targetY = 90; break;      // Left (Face 5 visual is Right in CSS +90Y)
+      case 3: targetX = -90; targetY = 0; break;     // Top (Face 3 visual is Top -90X)
+      case 4: targetX = 90; targetY = 0; break;      // Bottom (Face 4 visual is Bottom +90X)
+    }
+
+    // 2. Add extra random full spins to the CURRENT rotation to simulate a long roll
+    const currentX = rotationRef.current.x;
+    const currentY = rotationRef.current.y;
+    
+    // Randomize spins (High number for 2 seconds of fast spinning)
+    // Use ease-linear CSS to ensure it doesn't slow down.
+    const spinsX = 8 + Math.floor(Math.random() * 8); 
+    const spinsY = 8 + Math.floor(Math.random() * 8);
+    
+    // Calculate new target. 
+    // Logic: Take current, add spins, add target offset, remove previous modulo drift
+    // Ideally: Base + Spins + Target.
+    const newX = currentX + (spinsX * 360) + (targetX - (currentX % 360));
+    const newY = currentY + (spinsY * 360) + (targetY - (currentY % 360));
+    
+    const finalRotation = { x: newX, y: newY, z: 0 };
+    setRotation(finalRotation);
+    rotationRef.current = finalRotation;
+    
+  }, [rollId, value, continuousRoll]); // Trigger whenever rollId changes
 
   // Unified Dot Component (All Red, All Same Size)
   const Dot = ({ style }: { style: any }) => (

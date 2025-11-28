@@ -1,4 +1,4 @@
-import { GameStats, RollResult } from '../types';
+import { GameStats, RollResult, Transaction } from '../types';
 import { AchievementType } from './achievements';
 
 export interface SavedGame {
@@ -6,6 +6,7 @@ export interface SavedGame {
   history: RollResult[];
   stats: GameStats;
   unlockedAchievements: AchievementType[];
+  transactions: Transaction[];
   lastSaveTime: number;
 }
 
@@ -15,7 +16,8 @@ export const saveGame = (
   balance: number,
   history: RollResult[],
   stats: GameStats,
-  unlockedAchievements: AchievementType[]
+  unlockedAchievements: AchievementType[],
+  transactions: Transaction[] = []
 ): void => {
   try {
     const saveData: SavedGame = {
@@ -23,6 +25,7 @@ export const saveGame = (
       history: history.slice(0, 100), // Save last 100 rolls
       stats,
       unlockedAchievements: Array.from(unlockedAchievements),
+      transactions: transactions.slice(0, 200), // Save last 200 transactions
       lastSaveTime: Date.now(),
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(saveData));

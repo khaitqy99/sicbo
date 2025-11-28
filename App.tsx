@@ -1,80 +1,55 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Dice from './components/Dice';
 import BettingTable from './components/BettingTable';
-import History from './components/History';
 import Bowl from './components/Bowl';
 import Confetti from './components/Confetti';
-import AchievementNotification from './components/AchievementNotification';
 import StatisticsPanel from './components/StatisticsPanel';
-import DailyChallenge from './components/DailyChallenge';
-import SettingsPanel from './components/SettingsPanel';
 import MoneyParticle from './components/MoneyParticle';
 import RippleEffect from './components/RippleEffect';
 import ChipParticle from './components/ChipParticle';
-
 import BigWinCelebration from './components/BigWinCelebration';
-import CountdownTimer from './components/CountdownTimer';
-import { BetArea, GameStats, RollResult, StrategyType } from './types';
+import ToastContainer from './components/ToastContainer';
+import { Toast, ToastType } from './components/Toast';
+import { BetArea, GameStats, RollResult, Transaction, TransactionType } from './types';
 import { CHIP_VALUES, INITIAL_BALANCE, PAYOUTS } from './constants';
-import { playSound } from './utils/sound';
-import { analyzeHistory } from './services/geminiService';
-import { checkAchievements, AchievementType, ACHIEVEMENTS } from './utils/achievements';
-import { saveGame, loadGame, clearSave } from './utils/storage';
-import { Sparkles, Play, StopCircle, RefreshCw, BrainCircuit, Wallet, Trophy, History as HistoryIcon, X, Settings, BarChart3, Target } from 'lucide-react';
+import { Wallet, History as HistoryIcon, X, BarChart3, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import DepositWithdraw from './components/DepositWithdraw';
+import { saveGame, loadGame } from './utils/storage';
 
-type GameState = 'IDLE' | 'ROLLING' | 'SHAKING' | 'READY_TO_OPEN' | 'REVEALED';
+type GameState = 'SHAKING' | 'BETTING' | 'NO_MORE_BETS' | 'READY_TO_OPEN' | 'REVEALED';
 
 const App: React.FC = () => {
-  // Add new state for fullscreen
+  // UI State
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Add state for utilities menu
   const [isUtilitiesOpen, setIsUtilitiesOpen] = useState(false);
   
-  // State
+  // Game State
   const [balance, setBalance] = useState(INITIAL_BALANCE);
   const [currentBets, setCurrentBets] = useState<Record<string, number>>({});
   const [selectedChip, setSelectedChip] = useState(CHIP_VALUES[0]);
   const [dice, setDice] = useState<[number, number, number]>([1, 1, 1]);
   const [rollId, setRollId] = useState(0); 
-  const [gameState, setGameState] = useState<GameState>('IDLE');
+  const [gameState, setGameState] = useState<GameState>('SHAKING');
+  const [bettingTimeLeft, setBettingTimeLeft] = useState(20); // 20 seconds betting time
   
   const [history, setHistory] = useState<RollResult[]>([]);
   const [lastWinAreas, setLastWinAreas] = useState<BetArea[]>([]);
   const [lastWinAmount, setLastWinAmount] = useState(0);
-  const [pendingResult, setPendingResult] = useState<{dice: [number, number, number], resultEntry: RollResult} | null>(null);
+  const [sessionCount, setSessionCount] = useState(1); // Track session number
+  
+  // Auto-open bowl timer
+  const autoOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto & Strategy
-  const [strategy, setStrategy] = useState<StrategyType>(StrategyType.MANUAL);
-  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
-  const [autoPlayCount, setAutoPlayCount] = useState(0);
-  const [lastRoundResult, setLastRoundResult] = useState<'win' | 'loss' | null>(null);
-  const [baseBets, setBaseBets] = useState<Record<string, number>>({}); 
-
-  // AI & Stats
-  const [aiComment, setAiComment] = useState<string>("");
-  const [isLoadingAi, setIsLoadingAi] = useState(false);
+  // UI State for panels
   const [stats, setStats] = useState<GameStats>({
     totalRolls: 0, bigCount: 0, smallCount: 0, tripleCount: 0,
     wins: 0, losses: 0, currentStreak: 0, longestWinStreak: 0, longestLossStreak: 0,
   });
 
-  // New Features
-  const [unlockedAchievements, setUnlockedAchievements] = useState<Set<AchievementType>>(new Set());
-  const [newAchievement, setNewAchievement] = useState<AchievementType | null>(null);
   const [confettiTrigger, setConfettiTrigger] = useState(0);
   const [confettiType, setConfettiType] = useState<'win' | 'bigWin' | 'triple'>('win');
-  const [comboCount, setComboCount] = useState(0);
-  const [comboMultiplier, setComboMultiplier] = useState(1);
   const [showStats, setShowStats] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showDailyChallenge, setShowDailyChallenge] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [animationSpeed, setAnimationSpeed] = useState(1);
-  const [dailyChallengeReward, setDailyChallengeReward] = useState(0);
-  const [betsLocked, setBetsLocked] = useState(false); // Lock bets once roll starts
-  const [lastRollTime, setLastRollTime] = useState(0); // Rate limiting
-  const MIN_BET_AMOUNT = 10; // Minimum bet requirement
-  const ROLL_COOLDOWN = 500; // Minimum time between rolls (ms)
+  const [betsLocked, setBetsLocked] = useState(false);
 
   // Visual Effects States
   const [screenShake, setScreenShake] = useState(false);
@@ -83,698 +58,415 @@ const App: React.FC = () => {
   const [chipParticles, setChipParticles] = useState<Array<{id: number, x: number, y: number, color: string}>>([]);
   const [diceGlow, setDiceGlow] = useState(false);
   const [sparkles, setSparkles] = useState<Array<{id: number, x: number, y: number}>>([]);
-  const particleIdRef = useRef(0);
+  const particleIdRef = React.useRef(0);
 
   // Excitement Features
   const [showBigWinCelebration, setShowBigWinCelebration] = useState(false);
   const [bigWinAmount, setBigWinAmount] = useState(0);
   const [bigWinMultiplier, setBigWinMultiplier] = useState(1);
-  const [streakBonus, setStreakBonus] = useState(0);
-  const [jackpotProgress, setJackpotProgress] = useState(0);
-  const [showQuickBet, setShowQuickBet] = useState(false);
 
-  // Session Management
-  const [isSessionActive, setIsSessionActive] = useState(false);
-  const [sessionTimeLeft, setSessionTimeLeft] = useState(60);
-  const [isBettingPhase, setIsBettingPhase] = useState(false);
-  const [bettingTimeLeft, setBettingTimeLeft] = useState(15);
-  const SESSION_DURATION = 60; // 60 seconds
-  const BETTING_DURATION = 15; // 15 seconds for betting
-  const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const sessionAutoRollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bettingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const bettingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Toast Messages
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastIdRef = useRef(0);
 
-  const autoPlayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startBettingPhaseRef = useRef<(() => void) | null>(null);
+  // Deposit/Withdraw State
+  const [showDepositWithdraw, setShowDepositWithdraw] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-  // --- Logic Same as Before ---
-  const handleBet = (area: BetArea, multiplier: number = 1) => {
-    // Allow betting during IDLE, REVEALED, or BETTING phase (in session)
-    if (gameState !== 'IDLE' && gameState !== 'REVEALED') {
-      // Only allow betting during betting phase if session is active
-      if (!(isSessionActive && isBettingPhase)) return;
-    }
-    if (isAutoPlaying) return;
-    if (betsLocked && !isBettingPhase) return; // Allow betting during betting phase
-    
-    const betAmount = Math.floor(selectedChip * multiplier);
-    if (betAmount <= 0) return;
-    
-    // Validate balance
-    if (balance < betAmount) { 
-      if (soundEnabled) playSound('loss'); 
-      return; 
-    }
-    
-    // Validate chip value is in allowed list
-    if (!CHIP_VALUES.includes(selectedChip)) {
-      return;
-    }
-    
-    // Calculate new total bet to ensure it doesn't exceed balance
-    const currentBetOnArea = currentBets[area] || 0;
-    const newBetOnArea = currentBetOnArea + betAmount;
-    const totalCurrentBets = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
-    const newTotalBets = totalCurrentBets - currentBetOnArea + newBetOnArea;
-    
-    if (newTotalBets > balance) {
-      if (soundEnabled) playSound('loss');
-      return;
-    }
-    
-    if (soundEnabled) playSound('chip');
-    
-    // Add chip particle effect
-    const chipColor = betAmount >= 1000 ? '#eab308' : betAmount >= 100 ? '#dc2626' : '#2563eb';
-    const newChipParticle = {
-      id: particleIdRef.current++,
-      x: window.innerWidth / 2,
-      y: 100,
-      color: chipColor,
+  // Helper function to show toast
+  const showToast = (message: string, type: ToastType = 'info', duration?: number, icon?: React.ReactNode) => {
+    const id = `toast-${toastIdRef.current++}`;
+    const newToast: Toast = { id, message, type, duration, icon };
+    setToasts(prev => [...prev, newToast]);
+  };
+
+  // Remove toast
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
+  // ======================
+  // DEPOSIT/WITHDRAW FUNCTIONS
+  // ======================
+
+  const handleDeposit = (amount: number, method: string) => {
+    const newTransaction: Transaction = {
+      id: `deposit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: TransactionType.DEPOSIT,
+      amount,
+      timestamp: Date.now(),
+      status: 'COMPLETED', // In real app, this would be 'PENDING' initially
+      method,
     };
-    setChipParticles(prev => [...prev, newChipParticle]);
-    
-    setBalance(prev => {
-      const newBalance = prev - betAmount;
-      // Ensure balance never goes negative
-      return Math.max(0, newBalance);
-    });
-    setCurrentBets(prev => {
-      const newBets = { ...prev, [area]: (prev[area] || 0) + betAmount };
-      // Check High Roller achievement
-      const totalBet = (Object.values(newBets) as number[]).reduce((a, b) => a + b, 0);
-      if (totalBet >= 5000 && !unlockedAchievements.has(AchievementType.HIGH_ROLLER)) {
-        setNewAchievement(AchievementType.HIGH_ROLLER);
-        setUnlockedAchievements(prev => new Set([...prev, AchievementType.HIGH_ROLLER]));
-      }
-      return newBets;
-    });
+
+    setTransactions(prev => [newTransaction, ...prev].slice(0, 200));
+    setBalance(prev => prev + amount);
+    showToast(`Đã nạp ${amount.toLocaleString()} VNĐ thành công!`, 'success', 3000);
+    setShowDepositWithdraw(false);
   };
 
+  const handleWithdraw = (amount: number, method: string) => {
+    if (amount > balance) {
+      showToast('Số dư không đủ để rút tiền!', 'error', 3000);
+      return;
+    }
+
+    const newTransaction: Transaction = {
+      id: `withdraw-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: TransactionType.WITHDRAW,
+      amount,
+      timestamp: Date.now(),
+      status: 'PENDING', // Withdrawals typically need processing time
+      method,
+    };
+
+    setTransactions(prev => [newTransaction, ...prev].slice(0, 200));
+    setBalance(prev => prev - amount);
+    showToast(`Đã gửi yêu cầu rút ${amount.toLocaleString()} VNĐ. Đang xử lý...`, 'info', 3000);
+    
+    // Simulate processing - in real app, this would be handled by backend
+    setTimeout(() => {
+      setTransactions(prev => 
+        prev.map(t => 
+          t.id === newTransaction.id ? { ...t, status: 'COMPLETED' as const } : t
+        )
+      );
+      showToast(`Rút ${amount.toLocaleString()} VNĐ đã hoàn tất!`, 'success', 3000);
+    }, 3000);
+    
+    setShowDepositWithdraw(false);
+  };
+
+  // ======================
+  // GAME LOGIC FUNCTIONS
+  // ======================
+
+  // Handle placing a bet
+  const handleBet = (area: BetArea, multiplier: number = 1) => {
+    if (gameState !== 'BETTING' && gameState !== 'REVEALED') return;
+    
+    const betAmount = selectedChip * multiplier;
+    
+    // Check if player has enough balance
+    if (balance < betAmount) {
+      showToast('Không đủ số dư để đặt cược!', 'error', 3000);
+      return;
+    }
+    
+    // Deduct from balance and add to bets
+    setBalance(prev => prev - betAmount);
+    setCurrentBets(prev => ({
+      ...prev,
+      [area]: (prev[area] || 0) + betAmount
+    }));
+  };
+
+  // Clear all bets
   const clearBets = () => {
-    // Allow clearing bets during IDLE, REVEALED, or BETTING phase (in session)
-    if (gameState !== 'IDLE' && gameState !== 'REVEALED') {
-      // Only allow clearing during betting phase if session is active
-      if (!(isSessionActive && isBettingPhase)) return;
-    }
-    if (isAutoPlaying) return;
-    if (betsLocked && !isBettingPhase) return; // Allow clearing during betting phase
+    if (gameState !== 'BETTING' && gameState !== 'REVEALED') return;
     
-    const totalBet = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
-    if (totalBet > 0) {
-      setBalance(prev => prev + totalBet);
+    // Return all bet money to balance
+    const totalBets = Object.values(currentBets).reduce((sum, amt) => sum + amt, 0);
+    if (totalBets > 0) {
+      setBalance(prev => prev + totalBets);
       setCurrentBets({});
+      showToast(`Đã hủy tất cả cược. Hoàn lại ${totalBets.toLocaleString()}`, 'info', 2500);
     }
   };
 
-  const calculateWins = (d: [number, number, number], bets: Record<string, number>) => {
-    const sum = d[0] + d[1] + d[2];
-    const isTriple = d[0] === d[1] && d[1] === d[2];
+  // Roll the dice (generate random result)
+  const rollDice = (): [number, number, number] => {
+    return [
+      Math.floor(Math.random() * 6) + 1,
+      Math.floor(Math.random() * 6) + 1,
+      Math.floor(Math.random() * 6) + 1
+    ];
+  };
+
+  // Check if dice result is a triple
+  const isTriple = (diceResult: [number, number, number]): boolean => {
+    return diceResult[0] === diceResult[1] && diceResult[1] === diceResult[2];
+  };
+
+  // Check if a bet area wins
+  const checkWin = (area: BetArea, diceResult: [number, number, number]): boolean => {
+    const sum = diceResult[0] + diceResult[1] + diceResult[2];
+    const triple = isTriple(diceResult);
+    
+    // Triple loses all Big/Small/Odd/Even bets
+    if (triple && (area === BetArea.BIG || area === BetArea.SMALL || area === BetArea.ODD || area === BetArea.EVEN)) {
+      return false;
+    }
+    
+    switch (area) {
+      case BetArea.SMALL:
+        return sum >= 4 && sum <= 10 && !triple;
+      case BetArea.BIG:
+        return sum >= 11 && sum <= 17 && !triple;
+      case BetArea.ODD:
+        return sum % 2 === 1 && !triple;
+      case BetArea.EVEN:
+        return sum % 2 === 0 && !triple;
+      case BetArea.TRIPLE_ANY:
+        return triple;
+      case BetArea.TRIPLE_SPECIFIC_1:
+      case BetArea.TRIPLE_SPECIFIC_2:
+      case BetArea.TRIPLE_SPECIFIC_3:
+      case BetArea.TRIPLE_SPECIFIC_4:
+      case BetArea.TRIPLE_SPECIFIC_5:
+      case BetArea.TRIPLE_SPECIFIC_6:
+        const num = parseInt(area.split('_')[1]);
+        return triple && diceResult[0] === num;
+      case BetArea.DOUBLE_1:
+      case BetArea.DOUBLE_2:
+      case BetArea.DOUBLE_3:
+      case BetArea.DOUBLE_4:
+      case BetArea.DOUBLE_5:
+      case BetArea.DOUBLE_6:
+        const doubleNum = parseInt(area.split('_')[1]);
+        const count = diceResult.filter(d => d === doubleNum).length;
+        return count >= 2;
+      case BetArea.SUM_4:
+      case BetArea.SUM_5:
+      case BetArea.SUM_6:
+      case BetArea.SUM_7:
+      case BetArea.SUM_8:
+      case BetArea.SUM_9:
+      case BetArea.SUM_10:
+      case BetArea.SUM_11:
+      case BetArea.SUM_12:
+      case BetArea.SUM_13:
+      case BetArea.SUM_14:
+      case BetArea.SUM_15:
+      case BetArea.SUM_16:
+      case BetArea.SUM_17:
+        const targetSum = parseInt(area.split('_')[1]);
+        return sum === targetSum;
+      case BetArea.SINGLE_1:
+      case BetArea.SINGLE_2:
+      case BetArea.SINGLE_3:
+      case BetArea.SINGLE_4:
+      case BetArea.SINGLE_5:
+      case BetArea.SINGLE_6:
+        const singleNum = parseInt(area.split('_')[1]);
+        return diceResult.includes(singleNum);
+      default:
+        return false;
+    }
+  };
+
+  // Calculate payout for a winning bet (considering Single bet special rule)
+  const calculatePayout = (area: BetArea, betAmount: number, diceResult: [number, number, number]): number => {
+    const basePayout = PAYOUTS[area];
+    
+    // Special rule for SINGLE bets: payout multiplies by appearance count
+    if (area.startsWith('SINGLE_')) {
+      const singleNum = parseInt(area.split('_')[1]);
+      const appearances = diceResult.filter(d => d === singleNum).length;
+      return betAmount * appearances; // 1:1, 2:1, or 3:1
+    }
+    
+    // Normal payout calculation
+    return betAmount * basePayout;
+  };
+
+  // Reveal the result and calculate wins
+  const revealResult = () => {
+    // Clear auto-open timer if exists
+    if (autoOpenTimerRef.current) {
+      clearTimeout(autoOpenTimerRef.current);
+      autoOpenTimerRef.current = null;
+    }
+    
+    setGameState('REVEALED');
+    setDiceGlow(true);
+    
+    const sum = dice[0] + dice[1] + dice[2];
+    const triple = isTriple(dice);
+    
+    // Find all winning areas
     const winningAreas: BetArea[] = [];
     let totalWin = 0;
-    const getBet = (area: string) => bets[area] || 0;
-
-    if (isTriple) {
-       winningAreas.push(BetArea.TRIPLE_ANY);
-       if (bets[BetArea.TRIPLE_ANY]) totalWin += bets[BetArea.TRIPLE_ANY] * PAYOUTS[BetArea.TRIPLE_ANY] + bets[BetArea.TRIPLE_ANY];
-       const specific = `TRIPLE_${d[0]}` as BetArea;
-       winningAreas.push(specific);
-       if (bets[specific]) totalWin += bets[specific] * PAYOUTS[specific] + bets[specific];
-    }
-    if (!isTriple) {
-      if (sum >= 11 && sum <= 17) {
-        winningAreas.push(BetArea.BIG);
-        if (bets[BetArea.BIG]) totalWin += bets[BetArea.BIG] * PAYOUTS[BetArea.BIG] + bets[BetArea.BIG];
+    
+    Object.entries(currentBets).forEach(([area, betAmount]) => {
+      if (checkWin(area as BetArea, dice)) {
+        winningAreas.push(area as BetArea);
+        const payout = calculatePayout(area as BetArea, betAmount, dice);
+        totalWin += payout + betAmount; // Return bet + winnings
       }
-      if (sum >= 4 && sum <= 10) {
-        winningAreas.push(BetArea.SMALL);
-        if (bets[BetArea.SMALL]) totalWin += bets[BetArea.SMALL] * PAYOUTS[BetArea.SMALL] + bets[BetArea.SMALL];
-      }
-    }
-    const sumKey = `SUM_${sum}` as BetArea;
-    if (PAYOUTS[sumKey]) {
-        winningAreas.push(sumKey);
-        if (bets[sumKey]) totalWin += bets[sumKey] * PAYOUTS[sumKey] + bets[sumKey];
-    }
-    const counts: Record<number, number> = {};
-    d.forEach(val => counts[val] = (counts[val] || 0) + 1);
-    for (let i = 1; i <= 6; i++) {
-        if (counts[i] >= 2) {
-            const doubleKey = `DOUBLE_${i}` as BetArea;
-            winningAreas.push(doubleKey);
-            if (bets[doubleKey]) totalWin += bets[doubleKey] * PAYOUTS[doubleKey] + bets[doubleKey];
-        }
-        if (counts[i] >= 1) {
-            const singleKey = `SINGLE_${i}` as BetArea;
-            winningAreas.push(singleKey);
-            if (bets[singleKey]) totalWin += bets[singleKey] + (bets[singleKey] * counts[i]);
-        }
-    }
-    return { winningAreas, totalWin };
-  };
-
-  const updateStats = (result: RollResult, totalWin: number, totalBet: number) => {
-    setStats(prev => {
-      const isWin = totalWin > 0;
-      const profitable = totalWin > totalBet;
-      const loss = totalWin < totalBet;
-      let newCurrentStreak = prev.currentStreak;
-      if (profitable) newCurrentStreak = newCurrentStreak > 0 ? newCurrentStreak + 1 : 1;
-      else if (loss) newCurrentStreak = newCurrentStreak < 0 ? newCurrentStreak - 1 : -1;
-
-      return {
-        totalRolls: prev.totalRolls + 1,
-        bigCount: (result.sum >= 11 && result.sum <= 17 && !result.isTriple) ? prev.bigCount + 1 : prev.bigCount,
-        smallCount: (result.sum >= 4 && result.sum <= 10 && !result.isTriple) ? prev.smallCount + 1 : prev.smallCount,
-        tripleCount: result.isTriple ? prev.tripleCount + 1 : prev.tripleCount,
-        wins: profitable ? prev.wins + 1 : prev.wins,
-        losses: loss ? prev.losses + 1 : prev.losses,
-        currentStreak: newCurrentStreak,
-        longestWinStreak: Math.max(prev.longestWinStreak, newCurrentStreak),
-        longestLossStreak: Math.min(prev.longestLossStreak, newCurrentStreak),
-      };
     });
-  };
-
-  const applyStrategy = (lastResult: 'win' | 'loss') => {
-    if (strategy === StrategyType.MANUAL || strategy === StrategyType.FIXED) {
-        const totalBet = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
-        // Validate minimum bet and balance
-        if (totalBet < MIN_BET_AMOUNT || balance < totalBet) {
-          setIsAutoPlaying(false); 
-          return false;
-        }
-        setBalance(b => Math.max(0, b - totalBet));
-        return true;
-    }
-    let newBets = { ...currentBets };
-    if (strategy === StrategyType.MARTINGALE) {
-        if (lastResult === 'loss') for (const k in newBets) newBets[k] *= 2;
-        else newBets = { ...baseBets };
-    } else if (strategy === StrategyType.ANTI_MARTINGALE) {
-        if (lastResult === 'win') for (const k in newBets) newBets[k] *= 2;
-        else newBets = { ...baseBets };
-    }
-    const totalBet = (Object.values(newBets) as number[]).reduce((a, b) => a + b, 0);
-    // Validate minimum bet and balance
-    if (totalBet >= MIN_BET_AMOUNT && balance >= totalBet) { 
-      setBalance(b => Math.max(0, b - totalBet)); 
-      setCurrentBets(newBets); 
-      return true; 
-    }
-    else { 
-      setIsAutoPlaying(false); 
-      return false; 
-    }
-  };
-
-  const startRoll = useCallback(() => {
-    // Rate limiting - prevent rapid clicking
-    const now = Date.now();
-    if (now - lastRollTime < ROLL_COOLDOWN) {
-      return;
-    }
-    
-    const totalBetAmount = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
-    
-    // Allow rolling without bets as per game design
-    if (totalBetAmount > 0 && totalBetAmount < MIN_BET_AMOUNT && !isAutoPlaying && !isSessionActive) {
-      alert(`Cược tối thiểu là ${MIN_BET_AMOUNT}!`);
-      return;
-    }
-    
-    // Validate balance is sufficient
-    if (totalBetAmount > balance) {
-      if (!isSessionActive) {
-        alert("Số dư không đủ!");
-      }
-      return;
-    }
-    
-    // Lock bets once roll starts
-    setBetsLocked(true);
-    setLastRollTime(now);
-    
-    setGameState('ROLLING');
-    setLastWinAreas([]);
-    if (soundEnabled) playSound('roll');
-    
-    const d1 = Math.floor(Math.random() * 6) + 1;
-    const d2 = Math.floor(Math.random() * 6) + 1;
-    const d3 = Math.floor(Math.random() * 6) + 1;
-    const newDice: [number, number, number] = [d1, d2, d3];
-    const sum = d1 + d2 + d3;
-    const isTriple = d1 === d2 && d2 === d3;
-
-    setDice(newDice);
-    setRollId(prev => prev + 1);
-    const resultEntry = { dice: newDice, sum, isTriple, timestamp: Date.now() };
-    setPendingResult({ dice: newDice, resultEntry });
-
-    setTimeout(() => {
-        setGameState('SHAKING');
-        if (soundEnabled) playSound('shake');
-        setTimeout(() => {
-            setGameState('READY_TO_OPEN');
-            if (soundEnabled) playSound('reveal');
-            // Auto reveal for session or auto-play
-            if (isAutoPlaying || isSessionActive) {
-              setTimeout(revealResult, 300);
-            }
-        }, 1000 / animationSpeed);
-    }, 2000 / animationSpeed);
-  }, [currentBets, isAutoPlaying, soundEnabled, animationSpeed, lastRollTime, balance, isSessionActive]);
-
-  const revealResult = useCallback(() => {
-    if (!pendingResult) return;
-    const { dice: finalDice, resultEntry } = pendingResult;
-    const totalBetAmount = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
-
-    setGameState('REVEALED');
-    let { winningAreas, totalWin } = calculateWins(finalDice, currentBets);
-    
-    // Apply combo multiplier
-    if (totalWin > 0 && comboCount > 0) {
-      totalWin = Math.floor(totalWin * comboMultiplier);
-    }
-    
-    // Apply 2% house fee on wins (reduced house edge for better player experience)
-    if (totalWin > 0) {
-      const houseFee = Math.floor(totalWin * 0.02); // 2% fee (reduced from 5%)
-      totalWin = totalWin - houseFee;
-    }
     
     setLastWinAreas(winningAreas);
     setLastWinAmount(totalWin);
     
-    // Add visual effects based on win amount
+    // Update balance
     if (totalWin > 0) {
-      // Money particles
-      const particleCount = totalWin > totalBetAmount * 2 ? 5 : totalWin > totalBetAmount ? 3 : 1;
-      const newParticles = Array.from({ length: particleCount }, (_, i) => ({
-        id: particleIdRef.current++,
-        amount: Math.floor(totalWin / particleCount),
-        x: window.innerWidth / 2 + (Math.random() - 0.5) * 200,
-        y: window.innerHeight / 2 + (Math.random() - 0.5) * 200,
-      }));
-      setMoneyParticles(prev => [...prev, ...newParticles]);
+      setBalance(prev => prev + totalWin);
       
-      // Screen shake for big wins
-      if (totalWin > totalBetAmount * 3) {
-        setScreenShake(true);
-        setTimeout(() => setScreenShake(false), 500);
-      }
-      
-      // Dice glow effect
-      setDiceGlow(true);
-      setTimeout(() => setDiceGlow(false), 2000);
-      
-      // Sparkles for big wins
-      if (totalWin > totalBetAmount * 2) {
-        const newSparkles = Array.from({ length: 20 }, (_, i) => ({
-          id: particleIdRef.current++,
-          x: Math.random() * window.innerWidth,
-          y: Math.random() * window.innerHeight,
-        }));
-        setSparkles(prev => [...prev, ...newSparkles]);
-      }
-    }
-    
-    // Play appropriate sound based on result
-    if (soundEnabled) {
-      if (resultEntry.isTriple) {
-        playSound('triple');
-        setConfettiType('triple');
-        setConfettiTrigger(prev => prev + 1);
-      } else if (totalWin > totalBetAmount * 2) {
-        // Big win (more than 2x the bet)
-        playSound('bigWin');
+      // Trigger visual effects
+      setConfettiTrigger(prev => prev + 1);
+      if (totalWin > 10000) {
         setConfettiType('bigWin');
-        setConfettiTrigger(prev => prev + 1);
-      } else if (totalWin > 0) {
-        playSound('win');
-        setConfettiType('win');
-        setConfettiTrigger(prev => prev + 1);
-      } else {
-        playSound('loss');
-        setComboCount(0);
-        setComboMultiplier(1);
-      }
-    }
-    
-    setBalance(prev => prev + totalWin); 
-    if (totalWin > 0 && soundEnabled) {
-      // Play chip sound for winnings
-      setTimeout(() => playSound('chip'), 200);
-    }
-    setHistory(prev => [resultEntry, ...prev]);
-    const isWin = totalWin > totalBetAmount;
-    
-    // Update stats first
-    setStats(prevStats => {
-      const updatedStats = { ...prevStats };
-      const profitable = totalWin > totalBetAmount;
-      const loss = totalWin < totalBetAmount;
-      let newCurrentStreak = prevStats.currentStreak;
-      if (profitable) newCurrentStreak = newCurrentStreak > 0 ? newCurrentStreak + 1 : 1;
-      else if (loss) newCurrentStreak = newCurrentStreak < 0 ? newCurrentStreak - 1 : -1;
-
-      updatedStats.totalRolls = prevStats.totalRolls + 1;
-      updatedStats.bigCount = (resultEntry.sum >= 11 && resultEntry.sum <= 17 && !resultEntry.isTriple) ? prevStats.bigCount + 1 : prevStats.bigCount;
-      updatedStats.smallCount = (resultEntry.sum >= 4 && resultEntry.sum <= 10 && !resultEntry.isTriple) ? prevStats.smallCount + 1 : prevStats.smallCount;
-      updatedStats.tripleCount = resultEntry.isTriple ? prevStats.tripleCount + 1 : prevStats.tripleCount;
-      updatedStats.wins = profitable ? prevStats.wins + 1 : prevStats.wins;
-      updatedStats.losses = loss ? prevStats.losses + 1 : prevStats.losses;
-      updatedStats.currentStreak = newCurrentStreak;
-      updatedStats.longestWinStreak = Math.max(prevStats.longestWinStreak, newCurrentStreak);
-      updatedStats.longestLossStreak = Math.min(prevStats.longestLossStreak, newCurrentStreak);
-
-      // Check achievements with updated stats
-      const newAchievements = checkAchievements(
-        updatedStats,
-        balance + totalWin,
-        totalWin,
-        finalDice,
-        resultEntry.sum,
-        unlockedAchievements
-      );
-      if (newAchievements.length > 0) {
-        setNewAchievement(newAchievements[0]);
-        setUnlockedAchievements(prev => new Set([...prev, ...newAchievements]));
-      }
-
-      return updatedStats;
-    });
-    
-    setLastRoundResult(isWin ? 'win' : 'loss');
-    
-    // Update combo and streak bonus
-    if (isWin) {
-      setComboCount(prev => prev + 1);
-      setComboMultiplier(prev => Math.min(prev + 0.1, 2.0)); // Max 2x multiplier
-      
-      // Streak bonus - bonus for consecutive wins
-      const currentStreak = stats.currentStreak > 0 ? stats.currentStreak + 1 : 1;
-      if (currentStreak >= 3) {
-        const bonus = Math.floor(totalWin * 0.1 * Math.min(currentStreak / 10, 1)); // Up to 10% bonus
-        setStreakBonus(bonus);
-        if (bonus > 0) {
-          setBalance(prev => prev + bonus);
-          setTimeout(() => setStreakBonus(0), 3000);
-        }
-      }
-      
-      // Big win celebration for wins > 5x bet
-      if (totalWin > totalBetAmount * 5) {
-        setBigWinAmount(totalWin);
-        setBigWinMultiplier((totalWin / totalBetAmount).toFixed(1) as any);
         setShowBigWinCelebration(true);
-      }
-      
-      // Jackpot progress
-      setJackpotProgress(prev => Math.min(prev + 0.5, 100));
-    } else {
-      setComboCount(0);
-      setComboMultiplier(1);
-      setJackpotProgress(prev => Math.max(prev - 1, 0));
-    }
-    
-    // Show win result longer - 4 seconds for manual play, 1.5 seconds for auto play or session (faster)
-    const displayDuration = (isAutoPlaying || isSessionActive) ? 1500 : 4000;
-    setTimeout(() => { 
-      setGameState('IDLE');
-      // Keep win amount visible a bit longer after state changes
-      if (totalWin > 0) {
-        setTimeout(() => setLastWinAmount(0), 500);
-      }
-      
-      // If session is active, start betting phase after reveal
-      if (isSessionActive && startBettingPhaseRef.current) {
-        startBettingPhaseRef.current();
+        setBigWinAmount(totalWin);
+        setBigWinMultiplier(Math.floor(totalWin / Object.values(currentBets).reduce((s, a) => s + a, 0)));
+      } else if (triple) {
+        setConfettiType('triple');
       } else {
-        // Unlock bets when game returns to IDLE (only if not in session)
-        setBetsLocked(false);
+        setConfettiType('win');
       }
-    }, displayDuration);
-  }, [pendingResult, currentBets, comboCount, comboMultiplier, stats, unlockedAchievements, isAutoPlaying, isSessionActive, balance]);
+    }
+    
+    // Update statistics
+    const didWin = totalWin > 0;
+    setStats(prev => ({
+      totalRolls: prev.totalRolls + 1,
+      bigCount: prev.bigCount + (sum >= 11 && sum <= 17 && !triple ? 1 : 0),
+      smallCount: prev.smallCount + (sum >= 4 && sum <= 10 && !triple ? 1 : 0),
+      tripleCount: prev.tripleCount + (triple ? 1 : 0),
+      wins: prev.wins + (didWin ? 1 : 0),
+      losses: prev.losses + (didWin ? 0 : 1),
+      currentStreak: didWin ? (prev.currentStreak >= 0 ? prev.currentStreak + 1 : 1) : (prev.currentStreak <= 0 ? prev.currentStreak - 1 : -1),
+      longestWinStreak: didWin ? Math.max(prev.longestWinStreak, prev.currentStreak >= 0 ? prev.currentStreak + 1 : 1) : prev.longestWinStreak,
+      longestLossStreak: !didWin ? Math.max(prev.longestLossStreak, prev.currentStreak <= 0 ? Math.abs(prev.currentStreak) + 1 : 1) : prev.longestLossStreak,
+    }));
+    
+    // Update history
+    setHistory(prev => [{
+      dice: dice,
+      sum: sum,
+      isTriple: triple,
+      timestamp: Date.now()
+    }, ...prev].slice(0, 50)); // Keep last 50 rolls
+    
+    setTimeout(() => {
+      setDiceGlow(false);
+    }, 2000);
+    
+    // Auto start new round after 5 seconds
+    setTimeout(() => {
+      startNewRound();
+    }, 5000);
+  };
 
-  // Session Management Functions
-  const startSession = useCallback(() => {
-    // Stop auto-play if active
-    if (isAutoPlaying) {
-      setIsAutoPlaying(false);
-    }
+  // Start a new round - begins with shaking dice
+  const startNewRound = useCallback(() => {
+    // Clear previous round data
+    setCurrentBets({});
+    setLastWinAreas([]);
+    setLastWinAmount(0);
+    setSessionCount(prev => prev + 1);
     
-    setIsSessionActive(true);
-    setSessionTimeLeft(SESSION_DURATION);
-    setIsBettingPhase(false);
-    setBettingTimeLeft(BETTING_DURATION);
+    // Start shaking phase
+    setGameState('SHAKING');
+    setScreenShake(true);
     
-    // Clear any existing bets
-    const totalBet = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
-    if (totalBet > 0) {
-      setBalance(prev => prev + totalBet);
-      setCurrentBets({});
-    }
-    
-    // Start the first roll immediately (roll ngay khi bắt đầu phiên)
-    if (gameState === 'IDLE' || gameState === 'REVEALED') {
-      // Small delay to ensure state is set
+    // Generate dice result (hidden under bowl)
+    setTimeout(() => {
+      const result = rollDice();
+      setDice(result);
+      setRollId(prev => prev + 1);
+      
+      // After shaking, open betting phase
       setTimeout(() => {
-        startRoll();
-      }, 100);
-    }
-  }, [gameState, startRoll, currentBets, isAutoPlaying]);
-
-  const stopSession = useCallback(() => {
-    setIsSessionActive(false);
-    setIsBettingPhase(false);
-    setSessionTimeLeft(SESSION_DURATION);
-    setBettingTimeLeft(BETTING_DURATION);
-    if (sessionTimerRef.current) {
-      clearInterval(sessionTimerRef.current);
-      sessionTimerRef.current = null;
-    }
-    if (sessionAutoRollRef.current) {
-      clearTimeout(sessionAutoRollRef.current);
-      sessionAutoRollRef.current = null;
-    }
-    if (bettingTimerRef.current) {
-      clearInterval(bettingTimerRef.current);
-      bettingTimerRef.current = null;
-    }
-    if (bettingTimeoutRef.current) {
-      clearTimeout(bettingTimeoutRef.current);
-      bettingTimeoutRef.current = null;
-    }
+        setScreenShake(false);
+        setGameState('BETTING');
+        setBettingTimeLeft(20); // Start 20 second countdown
+        setBetsLocked(false);
+      }, 2000); // 2 second shake
+    }, 100);
   }, []);
 
-  // Start betting phase after reveal
-  const startBettingPhase = useCallback(() => {
-    if (!isSessionActive) return;
+  // End betting phase and prepare to reveal
+  const endBetting = () => {
+    setGameState('NO_MORE_BETS');
+    setBetsLocked(true);
     
-    setIsBettingPhase(true);
-    setBettingTimeLeft(BETTING_DURATION);
-    setBetsLocked(false); // Allow betting during betting phase
+    setTimeout(() => {
+      setGameState('READY_TO_OPEN');
+      
+      // Auto-open bowl after 7 seconds if not manually opened
+      // Total time from SHAKING start to reveal: 2s (SHAKING) + 1s (NO_MORE_BETS) + 7s (READY_TO_OPEN) = 10s
+      autoOpenTimerRef.current = setTimeout(() => {
+        revealResult();
+      }, 7000);
+    }, 1000);
+  };
+
+  // ======================
+  // TIMER & AUTO-FLOW LOGIC
+  // ======================
+  
+  // Countdown timer for betting phase
+  useEffect(() => {
+    if (gameState !== 'BETTING') return;
     
-    // Clear any existing timers
-    if (bettingTimerRef.current) {
-      clearInterval(bettingTimerRef.current);
-      bettingTimerRef.current = null;
-    }
-    if (bettingTimeoutRef.current) {
-      clearTimeout(bettingTimeoutRef.current);
-      bettingTimeoutRef.current = null;
-    }
-    
-    // Start betting timer
-    bettingTimerRef.current = setInterval(() => {
+    const timer = setInterval(() => {
       setBettingTimeLeft(prev => {
-        if (prev <= 0.1) {
-          if (bettingTimerRef.current) {
-            clearInterval(bettingTimerRef.current);
-            bettingTimerRef.current = null;
-          }
+        if (prev <= 1) {
+          clearInterval(timer);
+          endBetting(); // End betting when time's up
           return 0;
         }
-        return prev - 0.1;
+        return prev - 1;
       });
-    }, 100);
+    }, 1000);
     
-    // Auto roll after betting time ends
-    bettingTimeoutRef.current = setTimeout(() => {
-      setIsBettingPhase(false);
-      setBetsLocked(true); // Lock bets when rolling starts
-      if (bettingTimerRef.current) {
-        clearInterval(bettingTimerRef.current);
-        bettingTimerRef.current = null;
-      }
-      // Auto roll after betting phase (only if session is still active and has time left)
-      if (isSessionActive && sessionTimeLeft > 0) {
-        startRoll();
-      }
-    }, BETTING_DURATION * 1000);
-  }, [isSessionActive, sessionTimeLeft, startRoll]);
-
-  // Store startBettingPhase in ref for use in revealResult
+    return () => clearInterval(timer);
+  }, [gameState]);
+  
+  // Cleanup timers on unmount
   useEffect(() => {
-    startBettingPhaseRef.current = startBettingPhase;
-  }, [startBettingPhase]);
-
-  // Session Timer Effect
-  useEffect(() => {
-    if (isSessionActive) {
-      sessionTimerRef.current = setInterval(() => {
-        setSessionTimeLeft(prev => {
-          if (prev <= 0.1) {
-            stopSession();
-            return 0;
-          }
-          return prev - 0.1;
-        });
-      }, 100);
-    } else {
-      if (sessionTimerRef.current) {
-        clearInterval(sessionTimerRef.current);
-        sessionTimerRef.current = null;
-      }
-    }
     return () => {
-      if (sessionTimerRef.current) {
-        clearInterval(sessionTimerRef.current);
+      if (autoOpenTimerRef.current) {
+        clearTimeout(autoOpenTimerRef.current);
       }
     };
-  }, [isSessionActive, stopSession]);
-
-  // Note: Auto roll during session is now handled by betting phase timeout
-  // No need for separate auto roll effect
-
+  }, []);
+  
+  // Load saved game data on mount
   useEffect(() => {
-    if (isAutoPlaying && gameState === 'IDLE') {
-        if (autoPlayCount > 0) {
-            autoPlayRef.current = setTimeout(() => {
-                const canProceed = applyStrategy(lastRoundResult || 'loss');
-                if (canProceed) { 
-                  startRoll(); 
-                  setAutoPlayCount(c => c - 1); 
-                } else {
-                  // If can't proceed (insufficient balance), stop auto-play
-                  setIsAutoPlaying(false);
-                }
-            }, 800 / animationSpeed); // Reduced delay for faster auto-play
-        } else { 
-          setIsAutoPlaying(false); 
-        }
-    }
-    return () => { if (autoPlayRef.current) clearTimeout(autoPlayRef.current); };
-  }, [isAutoPlaying, gameState, autoPlayCount, lastRoundResult, startRoll, animationSpeed]);
-
-  const toggleAutoPlay = () => {
-    if (isAutoPlaying) { 
-      setIsAutoPlaying(false); 
-      if (autoPlayRef.current) {
-        clearTimeout(autoPlayRef.current);
-        autoPlayRef.current = null;
-      }
-      return; 
-    }
-    
-    // Validate minimum bet only if there are bets
-    const totalBet = (Object.values(currentBets) as number[]).reduce((a, b) => a + b, 0);
-    if (totalBet > 0 && totalBet < MIN_BET_AMOUNT) {
-      alert(`Cược tối thiểu là ${MIN_BET_AMOUNT}!`);
-      return;
-    }
-    
-    // Validate balance
-    if (totalBet > balance) {
-      alert("Số dư không đủ!");
-      return;
-    }
-    
-    setBaseBets({...currentBets}); 
-    setAutoPlayCount(50); // Auto-play for 50 rounds
-    setIsAutoPlaying(true); 
-    // Start rolling immediately - no need to click roll button
-    if (gameState === 'IDLE' || gameState === 'REVEALED') {
-      startRoll();
-    }
-  };
-
-  const handleAiAdvice = async () => {
-      setIsLoadingAi(true);
-      const advice = await analyzeHistory(history);
-      setAiComment(advice);
-      setIsLoadingAi(false);
-  };
-
-  // Save/Load functions
-  const handleSaveGame = () => {
-    saveGame(balance, history, stats, Array.from(unlockedAchievements));
-    alert('Đã lưu game!');
-  };
-
-  const handleLoadGame = () => {
     const saved = loadGame();
     if (saved) {
       setBalance(saved.balance);
       setHistory(saved.history);
       setStats(saved.stats);
-      setUnlockedAchievements(new Set(saved.unlockedAchievements));
-      alert('Đã tải game!');
-    } else {
-      alert('Không tìm thấy file lưu!');
+      if (saved.transactions) {
+        setTransactions(saved.transactions);
+      }
     }
-  };
+  }, []);
 
-  const handleResetGame = () => {
-    setBalance(INITIAL_BALANCE);
-    setHistory([]);
-    setStats({
-      totalRolls: 0, bigCount: 0, smallCount: 0, tripleCount: 0,
-      wins: 0, losses: 0, currentStreak: 0, longestWinStreak: 0, longestLossStreak: 0,
-    });
-    setUnlockedAchievements(new Set());
-    setCurrentBets({});
-    clearSave();
-    alert('Đã reset game!');
-  };
-
-  const handleDailyChallengeComplete = (reward: number) => {
-    setBalance(prev => prev + reward);
-    setDailyChallengeReward(reward);
-    setTimeout(() => setDailyChallengeReward(0), 3000);
-  };
-
-  // Auto-save every 30 seconds
+  // Save game data when balance, history, stats, or transactions change
   useEffect(() => {
-    const interval = setInterval(() => {
-      saveGame(balance, history, stats, Array.from(unlockedAchievements));
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [balance, history, stats, unlockedAchievements]);
+    const unlockedAchievements: any[] = []; // You can integrate achievements later
+    saveGame(balance, history, stats, unlockedAchievements, transactions);
+  }, [balance, history, stats, transactions]);
 
-  // Function to enter fullscreen mode
+  // Start first round on mount
+  useEffect(() => {
+    startNewRound();
+  }, [startNewRound]);
+
+  // Fullscreen functions
   const enterFullscreen = useCallback(() => {
     const element = document.documentElement;
     if (element.requestFullscreen) {
       element.requestFullscreen();
-    } else if ((element as any).webkitRequestFullscreen) { // Safari
+    } else if ((element as any).webkitRequestFullscreen) {
       (element as any).webkitRequestFullscreen();
-    } else if ((element as any).msRequestFullscreen) { // IE11
+    } else if ((element as any).msRequestFullscreen) {
       (element as any).msRequestFullscreen();
     }
     setIsFullscreen(true);
   }, []);
 
-  // Function to exit fullscreen mode
   const exitFullscreen = useCallback(() => {
     if (document.exitFullscreen) {
       document.exitFullscreen();
-    } else if ((document as any).webkitExitFullscreen) { // Safari
+    } else if ((document as any).webkitExitFullscreen) {
       (document as any).webkitExitFullscreen();
-    } else if ((document as any).msExitFullscreen) { // IE11
+    } else if ((document as any).msExitFullscreen) {
       (document as any).msExitFullscreen();
     }
     setIsFullscreen(false);
@@ -786,16 +478,13 @@ const App: React.FC = () => {
       setIsFullscreen(!!document.fullscreenElement);
     };
 
-    // Check on mount
     checkFullscreen();
 
-    // Add event listeners
     document.addEventListener('fullscreenchange', checkFullscreen);
-    document.addEventListener('webkitfullscreenchange', checkFullscreen); // Safari
-    document.addEventListener('msfullscreenchange', checkFullscreen); // IE11
+    document.addEventListener('webkitfullscreenchange', checkFullscreen);
+    document.addEventListener('msfullscreenchange', checkFullscreen);
 
     return () => {
-      // Clean up event listeners
       document.removeEventListener('fullscreenchange', checkFullscreen);
       document.removeEventListener('webkitfullscreenchange', checkFullscreen);
       document.removeEventListener('msfullscreenchange', checkFullscreen);
@@ -806,7 +495,6 @@ const App: React.FC = () => {
   useEffect(() => {
     const hasVisited = localStorage.getItem('hasVisited');
     if (!hasVisited) {
-      // Small delay to ensure page is loaded
       const timer = setTimeout(() => {
         enterFullscreen();
         localStorage.setItem('hasVisited', 'true');
@@ -827,7 +515,10 @@ const App: React.FC = () => {
           </div>
           <div>
             <h1 className="text-gold font-serif text-sm md:text-base leading-none">SIC BO</h1>
-            <span className="text-[8px] md:text-[10px] text-yellow-500/80 tracking-widest">MASTER</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[8px] md:text-[10px] text-yellow-500/80 tracking-widest">MASTER</span>
+              <span className="text-[8px] md:text-[9px] text-gray-400 font-mono bg-black/40 px-1.5 py-0.5 rounded">#{sessionCount}</span>
+            </div>
           </div>
         </div>
 
@@ -878,15 +569,36 @@ const App: React.FC = () => {
                   </button>
                   
                   {/* History */}
-                  <div className="p-2">
-                    <div className="text-yellow-200 text-sm font-bold mb-1 flex items-center gap-1">
+                  <div className="p-2 border-t border-white/5">
+                    <div className="text-yellow-200 text-sm font-bold mb-2 flex items-center gap-1">
                       <HistoryIcon size={14} />
-                      <span>Recent Rolls:</span>
+                      <span>Lịch sử:</span>
                     </div>
-                    <div className="flex gap-1 flex-wrap max-h-20 overflow-y-auto">
-                      {history.slice(0, 15).map((h, i) => (
-                        <div key={i} className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${h.isTriple ? 'bg-green-600' : h.sum >= 11 ? 'bg-red-600' : 'bg-blue-600'}`}>
-                          {h.sum >= 11 && !h.isTriple ? 'L' : h.sum <= 10 && !h.isTriple ? 'N' : 'B'}
+                    <div className="bg-black/40 p-1 rounded border border-white/10 flex gap-[1px]">
+                      {Array.from({length: 10}).map((_, colIndex) => (
+                        <div key={colIndex} className="flex flex-col gap-[1px]">
+                          {Array.from({length: 3}).map((_, rowIndex) => {
+                            const historyIndex = (9 - colIndex) * 3 + (2 - rowIndex);
+                            const record = history[historyIndex];
+                            
+                            if (!record) return <div key={rowIndex} className="w-3 h-3 bg-[#1a1a1a] rounded-[1px]"></div>;
+                            
+                            return (
+                              <div 
+                                key={rowIndex}
+                                title={`${record.sum} (${record.dice.join('-')})`}
+                                className={`
+                                  w-3 h-3 rounded-[1px] flex items-center justify-center text-[6px] font-bold text-white
+                                  ${record.isTriple ? 'bg-green-600 shadow-[0_0_3px_green]' : 
+                                    record.sum >= 11 ? 'bg-red-600 shadow-[0_0_2px_red]' : 
+                                    'bg-blue-600 shadow-[0_0_2px_blue]'}
+                                  ${colIndex === 9 && rowIndex === 2 ? 'animate-pulse ring-1 ring-yellow-400' : ''}
+                                `}
+                              >
+                                {record.isTriple ? '🎰' : record.sum >= 11 ? 'T' : 'X'}
+                              </div>
+                            );
+                          })}
                         </div>
                       ))}
                     </div>
@@ -899,78 +611,11 @@ const App: React.FC = () => {
                       clearBets();
                       setIsUtilitiesOpen(false);
                     }}
-                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-white/10 transition-colors"
-                    disabled={gameState !== 'IDLE' && gameState !== 'REVEALED'}
+                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
+                    disabled={gameState !== 'BETTING' && gameState !== 'REVEALED'}
                   >
                     <X size={16} className="text-red-500" />
                     <span className="text-yellow-200 text-sm">Clear Bets</span>
-                  </button>
-                  
-                  {/* Session Play - 60 seconds auto roll */}
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (isSessionActive) {
-                        stopSession();
-                      } else {
-                        startSession();
-                      }
-                      setIsUtilitiesOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-2 p-2 rounded transition-colors ${
-                      isSessionActive ? 'hover:bg-red-900/50 bg-red-900/30' : 'hover:bg-blue-900/50'
-                    }`}
-                  >
-                    {isSessionActive ? (
-                      <>
-                        <StopCircle size={16} className="text-red-400" />
-                        <span className="text-yellow-200 text-sm">Dừng Phiên (60s)</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play size={16} className="text-blue-400" />
-                        <span className="text-yellow-200 text-sm">Bắt Đầu Phiên (60s)</span>
-                      </>
-                    )}
-                  </button>
-                  
-                  {/* Auto Play */}
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleAutoPlay();
-                      setIsUtilitiesOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-2 p-2 rounded transition-colors ${
-                      isAutoPlaying ? 'hover:bg-red-900/50' : 'hover:bg-green-900/50'
-                    }`}
-                    disabled={isSessionActive}
-                  >
-                    {isAutoPlaying ? (
-                      <>
-                        <StopCircle size={16} className="text-red-400" />
-                        <span className="text-yellow-200 text-sm">Stop Auto Play</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play size={16} className="text-green-400" />
-                        <span className="text-yellow-200 text-sm">Auto Play</span>
-                      </>
-                    )}
-                  </button>
-                  
-                  {/* AI Advice */}
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAiAdvice();
-                      setIsUtilitiesOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-purple-900/50 transition-colors"
-                    disabled={isLoadingAi}
-                  >
-                    <BrainCircuit size={16} className={`text-purple-400 ${isLoadingAi ? 'animate-spin' : ''}`} />
-                    <span className="text-yellow-200 text-sm">AI Advice</span>
                   </button>
                   
                   {/* Statistics */}
@@ -986,48 +631,33 @@ const App: React.FC = () => {
                     <span className="text-yellow-200 text-sm">Statistics</span>
                   </button>
                   
-                  {/* Settings */}
+                  {/* Deposit/Withdraw */}
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      setShowSettings(true);
+                      setShowDepositWithdraw(true);
                       setIsUtilitiesOpen(false);
                     }}
-                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-white/10 transition-colors"
+                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-green-900/50 transition-colors"
                   >
-                    <Settings size={16} className="text-gray-300" />
-                    <span className="text-yellow-200 text-sm">Settings</span>
-                  </button>
-                  
-                  {/* Daily Challenge */}
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowDailyChallenge(!showDailyChallenge);
-                      setIsUtilitiesOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-yellow-900/50 transition-colors"
-                  >
-                    <Target size={16} className="text-yellow-400" />
-                    <span className="text-yellow-200 text-sm">Daily Challenge</span>
+                    <Wallet size={16} className="text-green-400" />
+                    <span className="text-yellow-200 text-sm">Nạp/Rút Tiền</span>
                   </button>
                 </div>
               </div>
             )}
           </div>
           
-          {/* Session Status */}
-          {isSessionActive && (
-            <div className="bg-blue-600/80 border border-blue-400 rounded-full px-3 py-1 flex items-center gap-2 min-w-[100px] shadow-inner animate-pulse">
-              <Play size={12} className="text-blue-200" />
-              <span className="text-blue-100 font-mono font-bold text-sm">Phiên: {Math.ceil(sessionTimeLeft)}s</span>
-            </div>
-          )}
-          
-          {/* Balance Display */}
-          <div className="bg-black/60 border border-yellow-600/50 rounded-full px-3 py-1 flex items-center gap-2 min-w-[120px] shadow-inner">
-            <Wallet size={14} className="text-yellow-500" />
-            <span className="text-yellow-400 font-mono font-bold text-base md:text-lg">{balance.toLocaleString()}</span>
+          {/* Balance Display with Quick Deposit/Withdraw */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowDepositWithdraw(true)}
+              className="bg-black/60 border border-yellow-600/50 rounded-full px-3 py-1 flex items-center gap-2 min-w-[120px] shadow-inner hover:bg-black/80 transition-colors group"
+              title="Nạp/Rút Tiền"
+            >
+              <Wallet size={14} className="text-yellow-500 group-hover:scale-110 transition-transform" />
+              <span className="text-yellow-400 font-mono font-bold text-base md:text-lg">{balance.toLocaleString()}</span>
+            </button>
           </div>
         </div>
 
@@ -1041,6 +671,7 @@ const App: React.FC = () => {
 
         {/* Main Game Area - Responsive Grid Layout */}
         <div className="w-full max-w-6xl px-2 md:px-4 mt-16 md:mt-20 mb-2 md:mb-4 shrink-0 relative pb-2 md:pb-4">
+          
           {/* Responsive grid for game elements */}
           <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 md:gap-6 items-start">
             {/* Center: Game Stage (Dice & Bowl) - Maintains aspect ratio */}
@@ -1053,63 +684,37 @@ const App: React.FC = () => {
 
                 {/* Dice */}
                 <div className="perspective-1000 relative w-[180px] h-[180px] sm:w-[200px] sm:h-[200px] md:w-[280px] md:h-[280px] flex items-center justify-center z-10">
-                  <div className={`absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 scale-[0.6] sm:scale-[0.7] md:scale-[0.8] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[0]} rollId={rollId} /></div>
-                  <div className={`absolute bottom-1/4 left-1/4 -translate-x-1/2 translate-y-1/2 scale-[0.6] sm:scale-[0.7] md:scale-[0.8] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[1]} rollId={rollId} /></div>
-                  <div className={`absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 scale-[0.6] sm:scale-[0.7] md:scale-[0.8] ${diceGlow ? 'dice-win-glow' : ''}`}><Dice value={dice[2]} rollId={rollId} /></div>
+                  <div className={`absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 scale-[0.6] sm:scale-[0.7] md:scale-[0.8] ${diceGlow ? 'dice-win-glow' : ''}`}>
+                    <Dice value={dice[0]} rollId={rollId} continuousRoll={gameState === 'REVEALED'} />
+                  </div>
+                  <div className={`absolute bottom-1/4 left-1/4 -translate-x-1/2 translate-y-1/2 scale-[0.6] sm:scale-[0.7] md:scale-[0.8] ${diceGlow ? 'dice-win-glow' : ''}`}>
+                    <Dice value={dice[1]} rollId={rollId} continuousRoll={gameState === 'REVEALED'} />
+                  </div>
+                  <div className={`absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 scale-[0.6] sm:scale-[0.7] md:scale-[0.8] ${diceGlow ? 'dice-win-glow' : ''}`}>
+                    <Dice value={dice[2]} rollId={rollId} continuousRoll={gameState === 'REVEALED'} />
+                  </div>
                 </div>
 
-                {/* Bowl (Z-Index handled inside) */}
-                {(gameState === 'SHAKING' || gameState === 'READY_TO_OPEN') && (
-                  <>
-                    <Bowl 
-                      gameState={gameState} 
-                      onOpen={() => {
-                        playSound('button');
-                        revealResult();
-                      }} 
-                    />
-                  </>
-                )}
-
-                {/* Betting Phase Countdown Timer */}
-                {isSessionActive && isBettingPhase && (
-                  <CountdownTimer 
-                    duration={BETTING_DURATION}
-                    onComplete={() => {}}
-                    active={isBettingPhase}
-                    timeLeft={bettingTimeLeft}
-                  />
-                )}
-                
-                {/* Session Countdown Timer (only show when not in betting phase) */}
-                {isSessionActive && !isBettingPhase && (
-                  <CountdownTimer 
-                    duration={SESSION_DURATION}
-                    onComplete={stopSession}
-                    active={isSessionActive}
-                    timeLeft={sessionTimeLeft}
+                {/* Bowl - visible during all states except REVEALED */}
+                {gameState !== 'REVEALED' && (
+                  <Bowl 
+                    gameState={gameState} 
+                    bettingTimeLeft={bettingTimeLeft}
+                    onOpen={() => {
+                      revealResult();
+                    }} 
                   />
                 )}
 
-                {/* Notifications */}
-                {lastWinAmount > 0 && (gameState === 'REVEALED' || gameState === 'IDLE') && (
-                  <div className="absolute top-10 animate-bounce text-yellow-300 text-2xl sm:text-3xl md:text-4xl font-serif font-bold drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-50 text-stroke-gold">
-                    +{lastWinAmount.toLocaleString()}
-                    {comboCount > 0 && (
-                      <div className="text-sm sm:text-base md:text-lg text-orange-400 mt-1">
-                        COMBO x{comboCount} ({comboMultiplier.toFixed(1)}x)
+                {/* Win Notification */}
+                {lastWinAmount > 0 && gameState === 'REVEALED' && (
+                  <div className="absolute top-10 left-1/2 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-4 duration-500 z-50">
+                    <div className="px-6 py-3 rounded-full bg-gradient-to-r from-yellow-500/95 to-orange-500/95 border-2 border-yellow-300 shadow-2xl backdrop-blur-md">
+                      <div className="text-yellow-100 text-2xl sm:text-3xl md:text-4xl font-serif font-bold drop-shadow-lg flex items-center gap-2">
+                        <span className="text-green-300">+</span>
+                        <span>{lastWinAmount.toLocaleString()}</span>
                       </div>
-                    )}
-                  </div>
-                )}
-                {dailyChallengeReward > 0 && (
-                  <div className="absolute bottom-10 animate-bounce text-green-300 text-lg sm:text-xl md:text-2xl font-serif font-bold drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-50">
-                    Thử thách hàng ngày: +{dailyChallengeReward.toLocaleString()}
-                  </div>
-                )}
-                {streakBonus > 0 && (
-                  <div className="absolute top-20 animate-bounce text-orange-300 text-base sm:text-lg md:text-xl font-serif font-bold drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-50">
-                    🔥 Thưởng Chuỗi: +{streakBonus.toLocaleString()}!
+                    </div>
                   </div>
                 )}
               </div>
@@ -1118,7 +723,7 @@ const App: React.FC = () => {
             {/* Right: Action Buttons */}
             <div className="flex md:flex-col gap-2 md:gap-3 justify-center md:justify-start">
               {/* Quick Bet Buttons */}
-              {(gameState === 'IDLE' || gameState === 'REVEALED') && (Object.keys(currentBets).length > 0) && (
+              {gameState === 'BETTING' && (Object.keys(currentBets).length > 0) && (
                 <div className="flex gap-1 mb-1">
                   <button
                     onClick={() => {
@@ -1158,8 +763,6 @@ const App: React.FC = () => {
                   </button>
                 </div>
               )}
-
-              {/* Removed the old individual buttons since they're now in the utilities menu */}
             </div>
           </div>
         </div>
@@ -1174,19 +777,22 @@ const App: React.FC = () => {
                   <button
                     key={val}
                     onClick={() => setSelectedChip(val)}
-                    disabled={!(gameState === 'IDLE' || gameState === 'REVEALED' || (isSessionActive && isBettingPhase))}
+                    disabled={gameState !== 'BETTING'}
                     className={`
                       relative w-10 h-10 md:w-12 md:h-12 rounded-full shrink-0 transition-all active:scale-95
                       ${selectedChip === val ? '-translate-y-1 ring-2 ring-yellow-400 z-10' : 'hover:-translate-y-0.5 opacity-90'}
+                      ${gameState !== 'BETTING' ? 'opacity-50 cursor-not-allowed' : ''}
                     `}
                   >
                     {/* Chip Visual */}
                     <div 
                       className={`w-full h-full rounded-full border-[3px] border-dashed border-white/30 flex items-center justify-center text-[10px] md:text-xs font-bold text-white shadow-md`}
-                      style={{ background: val >= 1000 ? '#eab308' : val >= 100 ? '#dc2626' : '#2563eb' }}
+                      style={{ 
+                        background: val >= 1000000 ? '#eab308' : val >= 100000 ? '#f59e0b' : val >= 10000 ? '#dc2626' : '#2563eb' 
+                      }}
                     >
                       <div className="bg-black/20 w-[80%] h-[80%] rounded-full flex items-center justify-center border border-white/10">
-                        {val >= 1000 ? val/1000 + 'k' : val}
+                        {val >= 1000000 ? (val/1000000) + 'M' : val >= 1000 ? (val/1000) + 'k' : val}
                       </div>
                     </div>
                   </button>
@@ -1198,7 +804,7 @@ const App: React.FC = () => {
           <BettingTable 
               bets={currentBets} 
               onBet={handleBet} 
-              disabled={!(gameState === 'IDLE' || gameState === 'REVEALED' || (isSessionActive && isBettingPhase))} 
+              disabled={gameState !== 'BETTING'} 
               lastWinAreas={gameState === 'REVEALED' ? lastWinAreas : []}
               onRipple={(x, y) => {
                 const newRipple = {
@@ -1210,16 +816,6 @@ const App: React.FC = () => {
               }}
           />
           
-          {/* Betting Phase Notice */}
-          {isSessionActive && isBettingPhase && (
-            <div className="mt-2 text-center">
-              <div className="inline-block bg-blue-600/80 border border-blue-400 rounded-lg px-4 py-2 animate-pulse">
-                <span className="text-blue-100 font-bold text-sm md:text-base">
-                  ⏱️ Thời gian đặt cược: {Math.ceil(bettingTimeLeft)}s
-                </span>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1284,28 +880,6 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Jackpot Progress Bar */}
-      {jackpotProgress > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[50] bg-black/80 rounded-lg p-2 border border-yellow-600/50 min-w-[200px]">
-          <div className="text-xs text-yellow-400 mb-1 text-center font-bold">JACKPOT PROGRESS</div>
-          <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 transition-all duration-500"
-              style={{ width: `${jackpotProgress}%` }}
-            />
-          </div>
-          <div className="text-[10px] text-white/60 text-center mt-1">
-            {jackpotProgress.toFixed(1)}% - {jackpotProgress >= 100 ? 'JACKPOT READY!' : 'Keep winning!'}
-          </div>
-        </div>
-      )}
-
-      {/* Achievement Notification */}
-      <AchievementNotification
-        achievement={newAchievement ? ACHIEVEMENTS[newAchievement] : null}
-        onClose={() => setNewAchievement(null)}
-      />
-
       {/* Statistics Panel */}
       <StatisticsPanel
         stats={stats}
@@ -1314,40 +888,22 @@ const App: React.FC = () => {
         onClose={() => setShowStats(false)}
       />
 
-      {/* Settings Panel */}
-      <SettingsPanel
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        soundEnabled={soundEnabled}
-        onSoundToggle={setSoundEnabled}
-        animationSpeed={animationSpeed}
-        onAnimationSpeedChange={setAnimationSpeed}
-        onSaveGame={handleSaveGame}
-        onLoadGame={handleLoadGame}
-        onResetGame={handleResetGame}
-      />
+      {/* Toast Container */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} position="top-center" />
 
-      {/* Daily Challenges */}
-      <DailyChallenge
-        stats={stats}
+      {/* Deposit/Withdraw Modal */}
+      <DepositWithdraw
+        isOpen={showDepositWithdraw}
+        onClose={() => setShowDepositWithdraw(false)}
         balance={balance}
-        onComplete={handleDailyChallengeComplete}
-        isOpen={showDailyChallenge}
-        onClose={() => setShowDailyChallenge(false)}
+        onDeposit={handleDeposit}
+        onWithdraw={handleWithdraw}
+        transactions={transactions}
       />
 
-      {/* AI Modal Overlay */}
-      {aiComment && (
-        <div className="fixed bottom-24 right-4 max-w-[280px] bg-black/90 border border-purple-500 p-3 rounded-xl shadow-2xl z-[60] animate-in slide-in-from-bottom">
-             <div className="flex justify-between items-start mb-2">
-                 <h4 className="text-purple-400 font-bold flex items-center gap-2 text-sm"><Sparkles size={14} /> Gợi ý AI:</h4>
-                 <button onClick={() => setAiComment("")} className="text-zinc-500 hover:text-white p-1"><X size={14} /></button>
-             </div>
-             <p className="text-xs text-gray-200 italic leading-relaxed">"{aiComment}"</p>
-        </div>
-      )}
     </div>
   );
 };
 
 export default App;
+

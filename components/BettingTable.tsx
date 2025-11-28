@@ -13,9 +13,31 @@ interface BettingTableProps {
 
 const BettingTable: React.FC<BettingTableProps> = ({ bets, onBet, disabled, lastWinAreas, onRipple }) => {
   
+  // Helper function to get chip color based on amount
+  const getChipColor = (amount: number): string => {
+    if (amount >= 1000000) return '#eab308'; // Gold
+    if (amount >= 100000) return '#f59e0b'; // Orange
+    if (amount >= 10000) return '#dc2626'; // Red
+    return '#2563eb'; // Blue
+  };
+
+  // Helper function to format amount
+  const formatAmount = (amount: number): string => {
+    if (amount >= 1000000) {
+      const millions = amount / 1000000;
+      return millions % 1 === 0 ? `${millions}M` : `${millions.toFixed(1)}M`;
+    }
+    if (amount >= 1000) {
+      const thousands = amount / 1000;
+      return thousands % 1 === 0 ? `${thousands}k` : `${thousands.toFixed(1)}k`;
+    }
+    return amount.toString();
+  };
+  
   const Cell = ({ area, label, subLabel, odds, colSpan = 1, rowSpan = 1, bgClass="bg-[#4a0404]", textClass="text-yellow-100" }: any) => {
     const amount = bets[area] || 0;
     const isWinner = lastWinAreas.includes(area);
+    const chipColor = amount > 0 ? getChipColor(amount) : '#2563eb';
     
     const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
       if (!disabled && onBet) {
@@ -62,10 +84,35 @@ const BettingTable: React.FC<BettingTableProps> = ({ bets, onBet, disabled, last
         <div className="text-[8px] md:text-[10px] text-[#d4af37] mt-0.5 opacity-80">1:{odds}</div>
         
         {amount > 0 && (
-          <div className="absolute top-0 right-0 z-20">
-             <div className="w-6 h-6 md:w-8 md:h-8 rounded-full border-2 border-dashed border-white bg-blue-600 shadow-xl flex items-center justify-center text-white text-[8px] md:text-[10px] font-bold animate-float">
-                {amount >= 1000 ? (amount/1000) + 'k' : amount}
-             </div>
+          <div className="absolute top-0 right-0 z-20 p-1">
+            <div 
+              className="relative w-7 h-7 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white text-[8px] md:text-[10px] font-bold animate-float backdrop-blur-sm"
+              style={{
+                backgroundColor: chipColor,
+                boxShadow: `0 0 15px ${chipColor}80, 0 4px 8px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.2)`,
+              }}
+            >
+              {/* Outer border */}
+              <div 
+                className="absolute inset-0 rounded-full border-2 border-white/60"
+                style={{
+                  borderStyle: 'dashed',
+                }}
+              />
+              
+              {/* Inner circle for depth */}
+              <div 
+                className="absolute inset-[3px] rounded-full border border-white/40"
+                style={{
+                  backgroundColor: `${chipColor}dd`,
+                }}
+              />
+              
+              {/* Text content */}
+              <span className="relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                {formatAmount(amount)}
+              </span>
+            </div>
           </div>
         )}
       </button>

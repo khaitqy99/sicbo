@@ -69,3 +69,17 @@ export interface GameStats {
   longestWinStreak: number;
   longestLossStreak: number;
 }
+
+export enum TransactionType {
+  DEPOSIT = 'DEPOSIT',
+  WITHDRAW = 'WITHDRAW',
+}
+
+export interface Transaction {
+  id: string;
+  type: TransactionType;
+  amount: number;
+  timestamp: number;
+  status: 'PENDING' | 'COMPLETED' | 'FAILED';
+  method?: string; // Payment method (e.g., 'BANK', 'EWALLET', 'CRYPTO')
+}

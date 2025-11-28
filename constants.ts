@@ -1,6 +1,6 @@
 import { BetArea } from "./types";
 
-export const CHIP_VALUES = [10, 50, 100, 500, 1000, 5000];
+export const CHIP_VALUES = [10000, 50000, 100000, 500000, 1000000, 5000000]; // Mệnh giá theo VNĐ
 
 export const PAYOUTS: Record<BetArea, number> = {
   [BetArea.SMALL]: 1, // 1:1 (even money)
@@ -42,4 +42,4 @@ export const PAYOUTS: Record<BetArea, number> = {
   [BetArea.SINGLE_6]: 1,
 };
 
-export const INITIAL_BALANCE = 10000;
+export const INITIAL_BALANCE = 100000000; // 100 triệu VNĐ

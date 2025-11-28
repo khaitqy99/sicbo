@@ -1,22 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 interface BowlProps {
-  gameState: 'IDLE' | 'SHAKING' | 'READY_TO_OPEN' | 'REVEALED';
+  gameState: 'SHAKING' | 'BETTING' | 'NO_MORE_BETS' | 'READY_TO_OPEN' | 'REVEALED';
+  bettingTimeLeft?: number;
   onOpen: () => void;
 }
 
-const Bowl: React.FC<BowlProps> = ({ gameState, onOpen }) => {
+const Bowl: React.FC<BowlProps> = ({ gameState, bettingTimeLeft, onOpen }) => {
+  // Bowl is visible during: SHAKING, BETTING, NO_MORE_BETS, READY_TO_OPEN
+  // Bowl is hidden during: REVEALED
   if (gameState === 'REVEALED') return null;
 
   const isShaking = gameState === 'SHAKING';
   const isReady = gameState === 'READY_TO_OPEN';
+  const isBetting = gameState === 'BETTING';
 
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const startPosRef = useRef({ x: 0, y: 0 });
 
   const handleStart = (clientX: number, clientY: number) => {
-    if (!isReady) return;
+    if (!isReady) return; // Only allow interaction when ready to open
     setIsDragging(true);
     startPosRef.current = { x: clientX, y: clientY };
   };
@@ -99,19 +103,51 @@ const Bowl: React.FC<BowlProps> = ({ gameState, onOpen }) => {
              <div className="absolute top-4 left-4 w-3/4 h-3/4 rounded-full bg-gradient-to-br from-white to-transparent opacity-60"></div>
         </div>
 
-        {/* Handle / Knob */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-gradient-to-b from-[#ffffff] to-[#9ca3af] shadow-lg border-2 border-white flex items-center justify-center">
+        {/* Handle / Knob - Hidden when betting to show timer */}
+        {!isBetting && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-gradient-to-b from-[#ffffff] to-[#9ca3af] shadow-lg border-2 border-white flex items-center justify-center z-10">
             <div className="w-8 h-8 rounded-full bg-[#1e3a8a] border-4 border-white shadow-inner"></div>
-        </div>
-
-        {/* Interaction Hint */}
-        {isReady && offset.x === 0 && offset.y === 0 && (
-          <div className="absolute top-[110%] w-full flex justify-center pointer-events-none">
-             <div className="bg-black/70 text-yellow-400 px-3 py-1 rounded text-xs uppercase tracking-wider border border-yellow-600/30 backdrop-blur-sm animate-pulse">
-               {isDragging ? 'Throw to Open' : 'Tap or Drag'}
-             </div>
           </div>
         )}
+
+        {/* Betting Time Countdown - Center of Bowl */}
+        {isBetting && bettingTimeLeft !== undefined && (() => {
+          const isUrgent = bettingTimeLeft <= 5;
+          const isWarning = bettingTimeLeft <= 10;
+          
+          // Message based on time left
+          const getMessage = () => {
+            if (isUrgent) return 'Gấp!';
+            if (isWarning) return 'Nhanh lên';
+            return 'Đặt cược';
+          };
+          
+          return (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none text-center">
+              <div className="flex flex-col items-center gap-2">
+                {/* Time Number */}
+                <span className={`
+                  font-mono text-5xl font-bold
+                  ${isUrgent ? 'text-red-400' : 'text-yellow-400'}
+                  drop-shadow-[0_0_12px_currentColor]
+                  ${isUrgent ? 'animate-pulse' : ''}
+                `}>
+                  {bettingTimeLeft}
+                </span>
+                {/* Message */}
+                <span className={`
+                  text-xs font-semibold uppercase tracking-widest
+                  ${isUrgent ? 'text-red-400' : isWarning ? 'text-yellow-400' : 'text-yellow-400/90'}
+                  drop-shadow-[0_0_6px_currentColor]
+                  ${isUrgent ? 'animate-pulse' : ''}
+                `}>
+                  {getMessage()}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+
       </div>
     </div>
   );
